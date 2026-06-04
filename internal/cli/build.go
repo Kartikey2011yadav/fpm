@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 )
 
@@ -10,10 +8,7 @@ var buildCmd = &cobra.Command{
 	Use:   "build [path]",
 	Short: "Build a wheel or source distribution",
 	Args:  cobra.MaximumNArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Println("fpm build: not yet implemented")
-		return nil
-	},
+	// implemented in build_impl.go
 }
 
 func init() {
