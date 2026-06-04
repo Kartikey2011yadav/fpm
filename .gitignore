@@ -40,3 +40,7 @@ dist/
 
 # dump
 /dump/
+
+# Node (prettier dev tooling)
+node_modules/
+package-lock.json

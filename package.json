@@ -1,0 +1,24 @@
+{
+  "name": "fpm",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kartikey2011yadav/fpm.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Kartikey2011yadav/fpm/issues"
+  },
+  "homepage": "https://github.com/Kartikey2011yadav/fpm#readme",
+  "devDependencies": {
+    "prettier": "^3.8.3"
+  }
+}

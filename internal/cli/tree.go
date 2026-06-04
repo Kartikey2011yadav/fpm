@@ -1,18 +1,13 @@
 package cli
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 )
 
 var treeCmd = &cobra.Command{
 	Use:   "tree",
 	Short: "Display the dependency tree",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Println("fpm tree: not yet implemented")
-		return nil
-	},
+	RunE: nil, // implemented in tree_impl.go
 }
 
 func init() {
