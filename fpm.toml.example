@@ -1,0 +1,59 @@
+# fpm.toml — Fast Package Manager configuration
+# This file configures fpm for your project.
+
+[project]
+name = "my-project"
+version = "0.1.0"
+description = "A Python project managed by fpm"
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.28",
+    "numpy>=1.24",
+]
+dev-dependencies = [
+    "pytest>=7.0",
+    "ruff>=0.1",
+]
+
+[tool.fpm]
+# Policy when a package exists in another manager (pip/conda):
+# "ask" = prompt user (default), "install" = always install, "skip" = always skip
+cross-manager-policy = "ask"
+
+# Linking mode for packages from cache to environment:
+# "auto" = best available (reflink > hardlink > copy)
+link-mode = "auto"
+
+# Maximum parallel downloads
+concurrency = 50
+
+[python]
+# Python version constraint for this project
+version = "3.11"
+
+# Where to find Python: "managed" (fpm-installed), "system", "only-managed"
+preference = "managed"
+
+[cache]
+# Custom cache directory (default: platform-specific, e.g. ~/.cache/fpm)
+# dir = "/custom/cache/path"
+
+# Immutable packages: these versions are locked and cannot be changed
+# by transitive dependencies or user installs. The resolver will backtrack
+# to find compatible alternatives.
+[immutable]
+packages = [
+    { name = "numpy", version = "1.24.0" },
+    { name = "pandas", version = "2.0.0" },
+]
+
+# Package indexes (PyPI is the default)
+[[index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+default = true
+
+# Example: private registry
+# [[index]]
+# name = "internal"
+# url = "https://pypi.internal.company.com/simple"

@@ -1,0 +1,12 @@
+- Read CLAUDE.md for development guidelines
+- ALWAYS run `go build ./...` to verify compilation after changes
+- ALWAYS run `go test ./...` to verify tests pass
+- PREFER running specific package tests: `go test ./internal/pep440/`
+- AVOID modifying go.mod directly — use `go get` and `go mod tidy`
+- PREFER `internal/` packages over `pkg/` for implementation details
+- ALWAYS write table-driven tests with meaningful test names
+- AVOID global state — pass dependencies explicitly
+- PREFER interfaces for testability (especially for I/O and HTTP)
+- NEVER skip error handling — every error must be addressed
+- PREFER descriptive variable names over abbreviations
+- AVOID deep package nesting — flat is better than nested

@@ -1,0 +1,38 @@
+services:
+  fpm:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/io
+      - fpm-cache:/root/.cache/fpm
+    working_dir: /io
+
+  # Development container with Go toolchain
+  dev:
+    image: golang:1.22-alpine
+    volumes:
+      - .:/workspace
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+    working_dir: /workspace
+    command: ["sh", "-c", "apk add --no-cache git make && make build && tail -f /dev/null"]
+    environment:
+      - CGO_ENABLED=0
+
+  # Test runner
+  test:
+    image: golang:1.22-alpine
+    volumes:
+      - .:/workspace
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+    working_dir: /workspace
+    command: ["go", "test", "./...", "-v"]
+    environment:
+      - CGO_ENABLED=0
+
+volumes:
+  fpm-cache:
+  go-mod-cache:
+  go-build-cache:
