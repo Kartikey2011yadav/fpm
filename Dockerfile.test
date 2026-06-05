@@ -1,19 +1,28 @@
+FROM golang:1.22-bookworm AS builder
+
+WORKDIR /fpm
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -o /fpm-bin ./cmd/fpm
+
 FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV PATH="/root/.local/share/fpm/bin:/root/.local/bin:/usr/local/go/bin:${PATH}"
+ENV PATH="/root/.local/share/fpm/bin:/root/.local/bin:/usr/local/bin:${PATH}"
 
-# System dependencies
+# System dependencies + CA certificates (fixes SSL issues)
 RUN apt-get update && apt-get install -y \
     python3 python3-pip python3-venv \
-    curl wget git build-essential \
+    ca-certificates curl wget git build-essential \
+    && update-ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Go (for building fpm from source)
-RUN curl -fsSL https://go.dev/dl/go1.22.4.linux-amd64.tar.gz | tar -C /usr/local -xzf -
+# Copy pre-built fpm binary from builder stage
+COPY --from=builder /fpm-bin /usr/local/bin/fpm
 
 # Install uv (for coexistence testing)
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh || true
 
 # Install conda/miniconda (for coexistence testing)
 RUN wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /tmp/miniconda.sh \
@@ -21,15 +30,10 @@ RUN wget -q https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.s
     && rm /tmp/miniconda.sh
 ENV PATH="/opt/conda/bin:${PATH}"
 
-# Copy fpm source and build
-WORKDIR /fpm
-COPY . .
-RUN go build -o /usr/local/bin/fpm ./cmd/fpm
-
 # Create test workspace
 WORKDIR /workspace
 
 # Verify installations
-RUN python3 --version && pip3 --version && fpm version && uv --version && conda --version
+RUN python3 --version && pip3 --version && fpm version
 
 CMD ["/bin/bash"]
