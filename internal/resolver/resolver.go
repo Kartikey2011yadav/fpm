@@ -3,6 +3,8 @@ package resolver
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 
 	"github.com/kartikeyyadav/fpm/internal/client"
@@ -195,10 +197,23 @@ func (r *Resolver) resolvePackage(req pep508.Requirement) (*ResolvedPackage, err
 }
 
 func (r *Resolver) fetchMetadata(file client.SimpleFile) (*wheel.Metadata, error) {
-	// In a full implementation, this would download and parse METADATA
-	// For now, return nil to indicate metadata not available
-	// This will be enhanced in Phase 5 with actual wheel metadata fetching
-	return nil, nil
+	if file.URL == "" {
+		return nil, fmt.Errorf("no URL for metadata fetch")
+	}
+
+	// Download the wheel to a temp location and extract metadata
+	tmpDir, err := os.MkdirTemp("", "fpm-metadata-*")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(tmpDir)
+
+	wheelPath := filepath.Join(tmpDir, file.Filename)
+	if err := r.client.DownloadWheel(r.ctx, file, wheelPath); err != nil {
+		return nil, fmt.Errorf("failed to download for metadata: %w", err)
+	}
+
+	return wheel.ReadMetadataFromZip(wheelPath)
 }
 
 func (r *Resolver) checkImmutable(name types.PackageName) error {
