@@ -11,3 +11,9 @@
 - ALWAYS use `filepath.Join` for path construction (cross-platform)
 - PREFER goroutines + errgroup for parallel operations
 - RUN `go vet ./...` before committing
+- ALWAYS keep docs in sync: when adding/changing features, update the relevant
+  README.md in the module directory, root README.md features list, and any
+  affected per-module docs
+- EVERY internal/ and pkg/ directory MUST have a README.md explaining its
+  purpose, key types, and usage
+- When a new command is added, update the root README.md CLI reference table
