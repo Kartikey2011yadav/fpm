@@ -333,9 +333,12 @@ func (s *Store) GetCurrent() (string, error) {
 	return strings.TrimSpace(string(data)), nil
 }
 
+var idCounter int64
+
 func generateID() string {
 	now := time.Now()
-	return now.Format("20060102-150405")
+	idCounter++
+	return fmt.Sprintf("%s-%03d", now.Format("20060102-150405"), idCounter)
 }
 
 func hashPath(path string) string {

@@ -1,0 +1,25 @@
+services:
+  # Full test environment with all package managers
+  test-full:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    volumes:
+      - ./test-workspace:/workspace
+    working_dir: /workspace
+    command:
+      [
+        "bash",
+        "-c",
+        "echo 'Test environment ready. Run: docker compose -f
+        docker-compose.test.yml exec test-full bash'",
+      ]
+
+  # Minimal test (only fpm + pip)
+  test-minimal:
+    image: python:3.11-slim
+    volumes:
+      - ./bin/fpm:/usr/local/bin/fpm
+      - ./test-workspace:/workspace
+    working_dir: /workspace
+    command: ["bash"]

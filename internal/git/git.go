@@ -80,21 +80,21 @@ func ParseGitURL(rawURL string) (*GitSource, error) {
 		url = url[4:]
 	}
 
+	// Check for #subdirectory fragment FIRST (before @ref parsing)
+	if hashIdx := strings.Index(url, "#"); hashIdx > 0 {
+		fragment := url[hashIdx+1:]
+		url = url[:hashIdx]
+		if strings.HasPrefix(fragment, "subdirectory=") {
+			source.Subdirectory = strings.TrimPrefix(fragment, "subdirectory=")
+		}
+	}
+
 	// Check for @ref suffix
 	if atIdx := strings.LastIndex(url, "@"); atIdx > 0 {
 		// Make sure it's not part of ssh URL (git@github.com)
 		if !strings.Contains(url[:atIdx], ":") || strings.Contains(url[:atIdx], "://") {
 			source.Reference = url[atIdx+1:]
 			url = url[:atIdx]
-		}
-	}
-
-	// Check for #subdirectory fragment
-	if hashIdx := strings.Index(url, "#"); hashIdx > 0 {
-		fragment := url[hashIdx+1:]
-		url = url[:hashIdx]
-		if strings.HasPrefix(fragment, "subdirectory=") {
-			source.Subdirectory = strings.TrimPrefix(fragment, "subdirectory=")
 		}
 	}
 
