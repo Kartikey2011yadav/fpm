@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 
@@ -23,11 +24,28 @@ func runVenv(cmd *cobra.Command, args []string) error {
 	systemPackages, _ := cmd.Flags().GetBool("system-packages")
 	prompt, _ := cmd.Flags().GetString("prompt")
 
-	// Find Python interpreter
+	// Find Python interpreter matching requested version
 	finder := python.NewFinder()
 	interp, err := finder.FindBest(pythonVersion)
-	if err != nil {
-		return fmt.Errorf("could not find Python: %w", err)
+
+	if err != nil && pythonVersion != "" {
+		// Python version not found locally — offer to download it
+		fmt.Printf("Python %s not found locally.\n", pythonVersion)
+		fmt.Printf("Downloading Python %s...\n", pythonVersion)
+
+		ctx := context.Background()
+		_, installErr := python.InstallVersion(ctx, pythonVersion)
+		if installErr != nil {
+			return fmt.Errorf("could not find or install Python %s: %w", pythonVersion, installErr)
+		}
+
+		// Retry finding after install
+		interp, err = finder.FindBest(pythonVersion)
+		if err != nil {
+			return fmt.Errorf("Python %s installed but not found: %w", pythonVersion, err)
+		}
+	} else if err != nil {
+		return fmt.Errorf("could not find Python: %w\n  hint: specify a version with --python 3.11 or install one with 'fpm python install 3.11'", err)
 	}
 
 	absPath, _ := filepath.Abs(path)
@@ -48,6 +66,9 @@ func runVenv(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Created virtual environment at %s\n", v.Path)
 	fmt.Printf("  Python: %s (%s)\n", interp.VersionString(), interp.Path)
 	fmt.Printf("  Activate: source %s/activate\n", v.BinDir)
+	fmt.Printf("\n")
+	fmt.Printf("  This venv uses Python %s independently of your system Python.\n", interp.VersionString())
+	fmt.Printf("  Your global Python is unaffected.\n")
 
 	return nil
 }

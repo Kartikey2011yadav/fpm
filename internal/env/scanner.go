@@ -18,6 +18,9 @@ const (
 	ManagerConda
 	ManagerSystem
 	ManagerFpm
+	ManagerUv
+	ManagerPoetry
+	ManagerPdm
 )
 
 func (m PackageManager) String() string {
@@ -30,6 +33,12 @@ func (m PackageManager) String() string {
 		return "system"
 	case ManagerFpm:
 		return "fpm"
+	case ManagerUv:
+		return "uv"
+	case ManagerPoetry:
+		return "poetry"
+	case ManagerPdm:
+		return "pdm"
 	default:
 		return "unknown"
 	}
@@ -179,7 +188,7 @@ func detectManager(distInfoPath string) PackageManager {
 	installerPath := filepath.Join(distInfoPath, "INSTALLER")
 	data, err := os.ReadFile(installerPath)
 	if err != nil {
-		return ManagerUnknown
+		return detectManagerFromPath(distInfoPath)
 	}
 
 	installer := strings.TrimSpace(string(data))
@@ -190,10 +199,27 @@ func detectManager(distInfoPath string) PackageManager {
 		return ManagerConda
 	case "fpm":
 		return ManagerFpm
+	case "uv":
+		return ManagerUv
+	case "poetry":
+		return ManagerPoetry
+	case "pdm":
+		return ManagerPdm
 	default:
-		if strings.Contains(strings.ToLower(distInfoPath), "conda") {
-			return ManagerConda
-		}
+		return detectManagerFromPath(distInfoPath)
+	}
+}
+
+func detectManagerFromPath(distInfoPath string) PackageManager {
+	lower := strings.ToLower(distInfoPath)
+	switch {
+	case strings.Contains(lower, "conda"):
+		return ManagerConda
+	case strings.Contains(lower, "/usr/lib/python"):
+		return ManagerSystem
+	case strings.Contains(lower, "/usr/local/lib/python"):
+		return ManagerSystem
+	default:
 		return ManagerUnknown
 	}
 }

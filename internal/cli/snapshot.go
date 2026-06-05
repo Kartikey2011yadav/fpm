@@ -15,7 +15,14 @@ var snapshotCmd = &cobra.Command{
 	Use:   "snapshot",
 	Short: "Manage environment snapshots (version your environment like git)",
 	Long: `Take snapshots of your entire environment state — all packages from all
-managers (fpm, pip, conda, system). Restore any previous state instantly.
+managers (fpm, pip, conda, uv, poetry, pdm, system). Restore any previous
+state instantly.
+
+Snapshots are scoped per-environment: each venv/project has its own
+independent snapshot history. This means:
+  - Project A's snapshots are separate from Project B's
+  - Each venv tracks its own timeline
+  - Global environment has its own snapshot history (use --global)
 
 Think of it as git for your Python environment.`,
 }
