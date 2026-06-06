@@ -1,6 +1,9 @@
 package cli
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/spf13/cobra"
 )
 
@@ -17,8 +20,7 @@ var rootCmd = &cobra.Command{
 	Use:   "fpm",
 	Short: "Fast Package Manager for Python",
 	Long:  "fpm is a high-performance Python package manager that coexists with pip/conda, provides immutable package pinning, and uses content-addressable caching for zero-duplication installs.",
-	SilenceUsage:  true,
-	SilenceErrors: true,
+	SilenceUsage: true,
 }
 
 func init() {
@@ -31,5 +33,9 @@ func init() {
 }
 
 func Execute() error {
-	return rootCmd.Execute()
+	err := rootCmd.Execute()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+	}
+	return err
 }

@@ -26,7 +26,7 @@ func init() {
 func runInstall(cmd *cobra.Command, args []string) error {
 	cfg, err := config.LoadFromCwd()
 	if err != nil {
-		return err
+		cfg = config.DefaultConfig()
 	}
 
 	// Parse requirements from args
@@ -39,6 +39,10 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		requirements = append(requirements, req)
 	}
 
+	if len(requirements) == 0 {
+		return fmt.Errorf("no packages specified")
+	}
+
 	// Find the active virtual environment
 	cwd, _ := os.Getwd()
 	activeVenv, err := venv.Detect(cwd)
@@ -46,18 +50,22 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no virtual environment found. Run 'fpm init' or 'fpm venv' first")
 	}
 
-	// Scan existing installations
-	sitePackagesDirs := env.FindSitePackagesDirs([]string{activeVenv.SitePackages})
-	scanner := env.NewScanner(sitePackagesDirs)
-	scanResult, _ := scanner.Scan()
-
-	// Cross-manager check will happen post-resolution when we know exact versions
-	toResolve := requirements
-
-	if len(toResolve) == 0 {
-		fmt.Println("Nothing to install.")
-		return nil
+	// Ensure site-packages directory exists
+	if activeVenv.SitePackages != "" {
+		os.MkdirAll(activeVenv.SitePackages, 0755)
 	}
+
+	// Scan existing installations
+	var scanResult *env.ScanResult
+	if activeVenv.SitePackages != "" {
+		scanner := env.NewScanner([]string{activeVenv.SitePackages})
+		scanResult, _ = scanner.Scan()
+	}
+	if scanResult == nil {
+		scanResult = &env.ScanResult{}
+	}
+
+	fmt.Printf("Resolving %d package(s)...\n", len(requirements))
 
 	// Resolve dependencies
 	pypiClient := client.New(client.ClientOptions{
@@ -70,9 +78,14 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		Client:     pypiClient,
 		Scanner:    scanResult,
 		Immutables: cfg.Immutable.Packages,
-	}).Resolve(toResolve)
+	}).Resolve(requirements)
 	if err != nil {
 		return fmt.Errorf("resolution failed: %w", err)
+	}
+
+	if len(res.Packages) == 0 {
+		fmt.Println("Nothing to install (no packages resolved).")
+		return nil
 	}
 
 	// Download and install
@@ -81,9 +94,10 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	refTracker := cache.NewRefTracker(pkgCache)
 
 	ctx := context.Background()
+	installed := 0
 	for _, pkg := range res.Packages {
 		if pkg.URL == "" {
-			fmt.Printf("  Resolved %s %s (no download URL)\n", pkg.Name.Raw(), pkg.Version.String())
+			fmt.Printf("  %s %s — resolved (no wheel URL available)\n", pkg.Name.Raw(), pkg.Version.String())
 			continue
 		}
 
@@ -93,26 +107,32 @@ func runInstall(cmd *cobra.Command, args []string) error {
 
 		if _, err := os.Stat(wheelPath); err != nil {
 			fmt.Printf("  Downloading %s %s...\n", pkg.Name.Raw(), pkg.Version.String())
-			if err := pypiClient.DownloadWheel(ctx, client.SimpleFile{URL: pkg.URL, Filename: wheelFilename}, wheelPath); err != nil {
-				return fmt.Errorf("failed to download %s: %w", pkg.Name.Raw(), err)
+			dlFile := client.SimpleFile{URL: pkg.URL, Filename: wheelFilename}
+			if err := pypiClient.DownloadWheel(ctx, dlFile, wheelPath); err != nil {
+				fmt.Fprintf(os.Stderr, "  error downloading %s: %v\n", pkg.Name.Raw(), err)
+				continue
 			}
+		} else {
+			fmt.Printf("  Using cached %s %s\n", pkg.Name.Raw(), pkg.Version.String())
 		}
 
 		// Store in CAS
 		casKey, err := pkgCache.Store(wheelPath)
 		if err != nil {
-			return fmt.Errorf("failed to store %s in cache: %w", pkg.Name.Raw(), err)
+			fmt.Fprintf(os.Stderr, "  error caching %s: %v\n", pkg.Name.Raw(), err)
+			continue
 		}
 
 		// Link to site-packages
 		casPath, _ := pkgCache.Retrieve(casKey)
 		if err := fs.LinkDir(casPath, activeVenv.SitePackages, fs.LinkModeAuto); err != nil {
-			return fmt.Errorf("failed to install %s: %w", pkg.Name.Raw(), err)
+			fmt.Fprintf(os.Stderr, "  error installing %s: %v\n", pkg.Name.Raw(), err)
+			continue
 		}
 
 		// Track reference
 		refTracker.AddReference(activeVenv.Path, casKey, pkg.Name.Normalized(), pkg.Version.String())
-
+		installed++
 		fmt.Printf("  Installed %s %s\n", pkg.Name.Raw(), pkg.Version.String())
 	}
 
@@ -129,6 +149,6 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	lf := lock.Generate(res, "")
 	lf.Write(filepath.Join(cwd, lock.LockFileName))
 
-	fmt.Printf("\nInstalled %d packages.\n", len(res.Packages))
+	fmt.Printf("\nDone: %d package(s) installed.\n", installed)
 	return nil
 }

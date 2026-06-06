@@ -142,6 +142,7 @@ func (r *Resolver) resolvePackage(req pep508.Requirement) (*ResolvedPackage, err
 	}
 
 	var candidates []candidate
+	seen := make(map[string]bool) // deduplicate by version string
 	for _, f := range detail.Files {
 		if f.IsYanked() {
 			continue
@@ -150,12 +151,44 @@ func (r *Resolver) resolvePackage(req pep508.Requirement) (*ResolvedPackage, err
 		if err != nil {
 			continue // skip non-wheel or unparseable
 		}
-		if req.Specifiers.Contains(whl.Version) {
+		if !req.Specifiers.Contains(whl.Version) {
+			continue
+		}
+		// Prefer pure-python wheels (py3-none-any) or skip platform check for now
+		verStr := whl.Version.String()
+		if seen[verStr] && !whl.IsPureWheel() {
+			continue
+		}
+		// Prefer pure wheels over platform-specific
+		if whl.IsPureWheel() || !seen[verStr] {
+			if whl.IsPureWheel() {
+				seen[verStr] = true
+			}
 			candidates = append(candidates, candidate{
 				version: whl.Version,
 				file:    f,
 			})
 		}
+	}
+	// Deduplicate: keep only one entry per version (prefer pure wheel)
+	versionBest := make(map[string]candidate)
+	for _, c := range candidates {
+		key := c.version.String()
+		existing, exists := versionBest[key]
+		if !exists {
+			versionBest[key] = c
+		} else {
+			// Prefer pure wheel
+			w1, _ := wheel.ParseFilename(c.file.Filename)
+			w2, _ := wheel.ParseFilename(existing.file.Filename)
+			if w1 != nil && w1.IsPureWheel() && (w2 == nil || !w2.IsPureWheel()) {
+				versionBest[key] = c
+			}
+		}
+	}
+	candidates = candidates[:0]
+	for _, c := range versionBest {
+		candidates = append(candidates, c)
 	}
 
 	if len(candidates) == 0 {
@@ -175,13 +208,21 @@ func (r *Resolver) resolvePackage(req pep508.Requirement) (*ResolvedPackage, err
 	// Pick the best candidate
 	best := candidates[0]
 
-	// Get dependency metadata
+	// Get dependency metadata from the selected wheel
 	var deps []pep508.Requirement
 	metadata, err := r.fetchMetadata(best.file)
 	if err == nil && metadata != nil {
 		for _, reqStr := range metadata.RequiresDist {
-			parsed, err := pep508.ParseRequirement(reqStr)
-			if err == nil {
+			parsed, parseErr := pep508.ParseRequirement(reqStr)
+			if parseErr == nil {
+				// Skip extras-only dependencies (e.g. ; extra == "security")
+				if parsed.Marker != nil {
+					// Evaluate with empty extra — skip if marker requires an extra
+					env := pep508.MarkerEnvironment{}
+					if !parsed.EvaluateMarkers(env) {
+						continue
+					}
+				}
 				deps = append(deps, parsed)
 			}
 		}
