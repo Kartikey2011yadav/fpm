@@ -11,14 +11,13 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        go: ["1.22"]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-go@v5
         with:
-          go-version: ${{ matrix.go }}
+          go-version: "stable"
 
       - name: Build
         run: go build ./...
@@ -40,15 +39,15 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version: "stable"
 
       - name: Go vet
         run: go vet ./...
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v4
+        uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          version: "latest"
 
   build-binaries:
     needs: [test, lint]
@@ -59,7 +58,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version: "stable"
 
       - name: Build all platforms
         run: make build-all
