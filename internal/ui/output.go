@@ -6,8 +6,40 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"golang.org/x/term"
+)
+
+// ANSI escape codes
+const (
+	Reset     = "\033[0m"
+	Bold      = "\033[1m"
+	Dim       = "\033[2m"
+	Italic    = "\033[3m"
+	Underline = "\033[4m"
+
+	Red     = "\033[31m"
+	Green   = "\033[32m"
+	Yellow  = "\033[33m"
+	Blue    = "\033[34m"
+	Magenta = "\033[35m"
+	Cyan    = "\033[36m"
+	White   = "\033[37m"
+)
+
+// Symbols for rich terminal output
+const (
+	SymCheck    = "✓"
+	SymCross    = "✗"
+	SymWarn     = "⚠"
+	SymArrow    = "→"
+	SymDot      = "●"
+	SymDownload = "↓"
+	SymPackage  = "📦"
+	SymLock     = "🔒"
+	SymRocket   = "🚀"
+	SymTrash    = "🗑"
 )
 
 type Level int
@@ -28,19 +60,20 @@ const (
 )
 
 type Output struct {
-	level    Level
-	color    ColorMode
-	json     bool
-	writer   io.Writer
+	level     Level
+	color     ColorMode
+	jsonMode  bool
+	writer    io.Writer
 	errWriter io.Writer
-	isTTY    bool
+	isTTY     bool
+	width     int
 }
 
 type Options struct {
-	Level    Level
-	Color    ColorMode
-	JSON     bool
-	Writer   io.Writer
+	Level     Level
+	Color     ColorMode
+	JSON      bool
+	Writer    io.Writer
 	ErrWriter io.Writer
 }
 
@@ -53,11 +86,17 @@ func NewOutput(opts Options) *Output {
 	}
 
 	isTTY := false
+	width := 80
 	if f, ok := opts.Writer.(*os.File); ok {
 		isTTY = term.IsTerminal(int(f.Fd()))
+		if isTTY {
+			w, _, err := term.GetSize(int(f.Fd()))
+			if err == nil && w > 0 {
+				width = w
+			}
+		}
 	}
 
-	// Respect NO_COLOR env var
 	if os.Getenv("NO_COLOR") != "" {
 		opts.Color = ColorNever
 	}
@@ -65,10 +104,11 @@ func NewOutput(opts Options) *Output {
 	return &Output{
 		level:     opts.Level,
 		color:     opts.Color,
-		json:      opts.JSON,
+		jsonMode:  opts.JSON,
 		writer:    opts.Writer,
 		errWriter: opts.ErrWriter,
 		isTTY:     isTTY,
+		width:     width,
 	}
 }
 
@@ -83,87 +123,221 @@ func (o *Output) useColor() bool {
 	}
 }
 
-// Status messages
+func (o *Output) style(s, codes string) string {
+	if !o.useColor() {
+		return s
+	}
+	return codes + s + Reset
+}
+
+// --- Status messages ---
+
+func (o *Output) Header(msg string) {
+	if o.level <= LevelQuiet {
+		return
+	}
+	fmt.Fprintf(o.writer, "\n%s\n", o.style(msg, Bold+White))
+}
 
 func (o *Output) Success(msg string) {
 	if o.level <= LevelQuiet {
 		return
 	}
-	if o.useColor() {
-		fmt.Fprintf(o.writer, "\033[32m✓\033[0m %s\n", msg)
-	} else {
-		fmt.Fprintf(o.writer, "  %s\n", msg)
-	}
+	fmt.Fprintf(o.writer, " %s %s\n", o.style(SymCheck, Bold+Green), msg)
+}
+
+func (o *Output) Error(msg string) {
+	fmt.Fprintf(o.errWriter, " %s %s\n", o.style(SymCross, Bold+Red), o.style(msg, Red))
 }
 
 func (o *Output) Warning(msg string) {
 	if o.level <= LevelSilent {
 		return
 	}
-	if o.useColor() {
-		fmt.Fprintf(o.errWriter, "\033[33m⚠\033[0m %s\n", msg)
-	} else {
-		fmt.Fprintf(o.errWriter, "warning: %s\n", msg)
-	}
-}
-
-func (o *Output) Error(msg string) {
-	if o.useColor() {
-		fmt.Fprintf(o.errWriter, "\033[31m✗\033[0m %s\n", msg)
-	} else {
-		fmt.Fprintf(o.errWriter, "error: %s\n", msg)
-	}
+	fmt.Fprintf(o.errWriter, " %s %s\n", o.style(SymWarn, Bold+Yellow), msg)
 }
 
 func (o *Output) Info(msg string) {
 	if o.level < LevelDefault {
 		return
 	}
-	fmt.Fprintf(o.writer, "  %s\n", msg)
+	fmt.Fprintf(o.writer, " %s %s\n", o.style(SymDot, Cyan), msg)
 }
 
 func (o *Output) Verbose(msg string) {
 	if o.level < LevelVerbose {
 		return
 	}
-	if o.useColor() {
-		fmt.Fprintf(o.writer, "\033[2m  %s\033[0m\n", msg)
-	} else {
-		fmt.Fprintf(o.writer, "  [debug] %s\n", msg)
-	}
+	fmt.Fprintf(o.writer, "   %s\n", o.style(msg, Dim))
 }
 
-func (o *Output) Header(msg string) {
+func (o *Output) Installing(name, version string) {
 	if o.level <= LevelQuiet {
 		return
 	}
-	if o.useColor() {
-		fmt.Fprintf(o.writer, "\033[1m%s\033[0m\n", msg)
-	} else {
-		fmt.Fprintf(o.writer, "%s\n", msg)
-	}
+	fmt.Fprintf(o.writer, " %s %s %s\n",
+		o.style(SymDownload, Bold+Blue), o.style(name, Bold), o.style(version, Cyan))
 }
 
-// JSON output
-
-func (o *Output) JSON(v interface{}) {
-	data, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		o.Error(fmt.Sprintf("failed to marshal JSON: %v", err))
+func (o *Output) Installed(name, version string) {
+	if o.level <= LevelQuiet {
 		return
 	}
-	fmt.Fprintln(o.writer, string(data))
+	fmt.Fprintf(o.writer, " %s %s %s\n",
+		o.style(SymCheck, Bold+Green), o.style(name, Bold), o.style(version, Green))
 }
 
-// Table output
+func (o *Output) Removed(name, version string) {
+	if o.level <= LevelQuiet {
+		return
+	}
+	fmt.Fprintf(o.writer, " %s %s %s\n",
+		o.style(SymCross, Red), o.style(name, Bold), o.style(version, Dim))
+}
+
+func (o *Output) Summary(msg string) {
+	if o.level <= LevelQuiet {
+		return
+	}
+	fmt.Fprintf(o.writer, "\n %s %s\n", o.style(SymRocket, ""), o.style(msg, Bold+Green))
+}
+
+// --- Progress Bar (pacman/apt-style) ---
+
+type ProgressBar struct {
+	output    *Output
+	total     int64
+	current   int64
+	label     string
+	startTime time.Time
+}
+
+func (o *Output) Progress(label string, total int64) *ProgressBar {
+	return &ProgressBar{
+		output:    o,
+		total:     total,
+		label:     label,
+		startTime: time.Now(),
+	}
+}
+
+func (p *ProgressBar) Set(n int64) {
+	p.current = n
+	if !p.output.isTTY || p.output.level <= LevelQuiet {
+		return
+	}
+
+	pct := float64(p.current) / float64(p.total) * 100
+	if pct > 100 {
+		pct = 100
+	}
+
+	barWidth := p.output.width - len(p.label) - 18
+	if barWidth < 10 {
+		barWidth = 10
+	}
+	if barWidth > 50 {
+		barWidth = 50
+	}
+
+	filled := int(float64(barWidth) * pct / 100)
+	if filled > barWidth {
+		filled = barWidth
+	}
+
+	// Pacman-style progress: filled with ━, head with ▶, empty with ─
+	var bar string
+	if p.output.useColor() {
+		bar = Green + strings.Repeat("━", filled)
+		if filled < barWidth {
+			bar += Bold + "▶" + Reset + Dim + strings.Repeat("─", barWidth-filled-1) + Reset
+		}
+		bar += Reset
+	} else {
+		bar = strings.Repeat("#", filled)
+		if filled < barWidth {
+			bar += ">"
+			bar += strings.Repeat("-", barWidth-filled-1)
+		}
+	}
+
+	// Speed calculation
+	speed := ""
+	elapsed := time.Since(p.startTime)
+	if elapsed > 0 && p.current > 0 {
+		bps := float64(p.current) / elapsed.Seconds()
+		if bps > 1024*1024 {
+			speed = fmt.Sprintf(" %.1f MB/s", bps/1024/1024)
+		} else if bps > 1024 {
+			speed = fmt.Sprintf(" %.0f KB/s", bps/1024)
+		}
+	}
+
+	fmt.Fprintf(p.output.writer, "\r %s [%s] %3.0f%%%s", p.label, bar, pct, speed)
+}
+
+func (p *ProgressBar) Finish() {
+	if p.output.isTTY && p.output.level > LevelQuiet {
+		fmt.Fprintf(p.output.writer, "\r%s\r", strings.Repeat(" ", p.output.width))
+	}
+}
+
+// --- Spinner (braille dots animation) ---
+
+type Spinner struct {
+	output  *Output
+	message string
+	done    chan struct{}
+}
+
+var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+
+func (o *Output) Spinner(message string) *Spinner {
+	s := &Spinner{output: o, message: message, done: make(chan struct{})}
+	if o.isTTY && o.level > LevelQuiet {
+		go s.animate()
+	}
+	return s
+}
+
+func (s *Spinner) animate() {
+	i := 0
+	ticker := time.NewTicker(80 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-s.done:
+			return
+		case <-ticker.C:
+			frame := spinnerFrames[i%len(spinnerFrames)]
+			if s.output.useColor() {
+				fmt.Fprintf(s.output.writer, "\r %s%s%s %s", Cyan+Bold, frame, Reset, s.message)
+			} else {
+				fmt.Fprintf(s.output.writer, "\r %s %s", frame, s.message)
+			}
+			i++
+		}
+	}
+}
+
+func (s *Spinner) Stop(result string) {
+	close(s.done)
+	if s.output.isTTY && s.output.level > LevelQuiet {
+		fmt.Fprintf(s.output.writer, "\r%s\r", strings.Repeat(" ", s.output.width))
+		if result != "" {
+			s.output.Success(s.message + ": " + result)
+		}
+	}
+}
+
+// --- Table (with aligned columns and header underline) ---
 
 func (o *Output) Table(headers []string, rows [][]string) {
-	if o.json {
+	if o.jsonMode {
 		o.tableAsJSON(headers, rows)
 		return
 	}
 
-	// Calculate column widths
 	widths := make([]int, len(headers))
 	for i, h := range headers {
 		widths[i] = len(h)
@@ -176,30 +350,17 @@ func (o *Output) Table(headers []string, rows [][]string) {
 		}
 	}
 
-	// Print header
-	if o.useColor() {
-		fmt.Fprintf(o.writer, "\033[1m")
-	}
+	// Header row
 	for i, h := range headers {
-		fmt.Fprintf(o.writer, "%-*s  ", widths[i], h)
-	}
-	if o.useColor() {
-		fmt.Fprintf(o.writer, "\033[0m")
+		fmt.Fprintf(o.writer, " %s  ", o.style(fmt.Sprintf("%-*s", widths[i], h), Bold+Underline))
 	}
 	fmt.Fprintln(o.writer)
 
-	// Separator
-	for i, w := range widths {
-		fmt.Fprintf(o.writer, "%s  ", strings.Repeat("─", w))
-		_ = i
-	}
-	fmt.Fprintln(o.writer)
-
-	// Rows
+	// Data rows
 	for _, row := range rows {
 		for i, cell := range row {
 			if i < len(widths) {
-				fmt.Fprintf(o.writer, "%-*s  ", widths[i], cell)
+				fmt.Fprintf(o.writer, " %-*s  ", widths[i], cell)
 			}
 		}
 		fmt.Fprintln(o.writer)
@@ -220,62 +381,13 @@ func (o *Output) tableAsJSON(headers []string, rows [][]string) {
 	o.JSON(result)
 }
 
-// Progress
+// --- JSON output ---
 
-type ProgressBar struct {
-	output  *Output
-	total   int64
-	current int64
-	label   string
-}
-
-func (o *Output) Progress(label string, total int64) *ProgressBar {
-	return &ProgressBar{
-		output: o,
-		total:  total,
-		label:  label,
-	}
-}
-
-func (p *ProgressBar) Set(n int64) {
-	p.current = n
-	if !p.output.isTTY || p.output.level <= LevelQuiet {
+func (o *Output) JSON(v interface{}) {
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		o.Error(fmt.Sprintf("JSON marshal error: %v", err))
 		return
 	}
-
-	pct := float64(p.current) / float64(p.total) * 100
-	barWidth := 30
-	filled := int(float64(barWidth) * float64(p.current) / float64(p.total))
-
-	bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
-	fmt.Fprintf(p.output.writer, "\r  %s [%s] %.0f%%", p.label, bar, pct)
-}
-
-func (p *ProgressBar) Finish() {
-	if p.output.isTTY && p.output.level > LevelQuiet {
-		fmt.Fprintf(p.output.writer, "\r%s\r", strings.Repeat(" ", 80))
-	}
-}
-
-// Spinner
-
-type Spinner struct {
-	output  *Output
-	message string
-	active  bool
-}
-
-func (o *Output) Spinner(message string) *Spinner {
-	s := &Spinner{output: o, message: message, active: true}
-	if o.isTTY && o.level > LevelQuiet {
-		fmt.Fprintf(o.writer, "  %s...", message)
-	}
-	return s
-}
-
-func (s *Spinner) Stop(result string) {
-	s.active = false
-	if s.output.isTTY && s.output.level > LevelQuiet {
-		fmt.Fprintf(s.output.writer, "\r  %s: %s\n", s.message, result)
-	}
+	fmt.Fprintln(o.writer, string(data))
 }
