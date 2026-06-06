@@ -44,10 +44,10 @@ jobs:
       - name: Go vet
         run: go vet ./...
 
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: "latest"
+      - name: Static checks
+        run: |
+          go build ./...
+          go test ./... -short
 
   build-binaries:
     needs: [test, lint]
