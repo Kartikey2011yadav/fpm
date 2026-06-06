@@ -221,6 +221,9 @@ func (o *Output) Progress(label string, total int64) *ProgressBar {
 	}
 }
 
+// Braille gradient characters from full to empty
+var brailleGradient = []rune{'⣿', '⣷', '⣯', '⣟', '⡿', '⣦', '⣤', '⡀', '⠀'}
+
 func (p *ProgressBar) Set(n int64) {
 	p.current = n
 	if !p.output.isTTY || p.output.level <= LevelQuiet {
@@ -232,32 +235,33 @@ func (p *ProgressBar) Set(n int64) {
 		pct = 100
 	}
 
-	barWidth := p.output.width - len(p.label) - 18
+	barWidth := p.output.width - len(p.label) - 20
 	if barWidth < 10 {
 		barWidth = 10
 	}
-	if barWidth > 50 {
-		barWidth = 50
+	if barWidth > 40 {
+		barWidth = 40
 	}
 
-	filled := int(float64(barWidth) * pct / 100)
-	if filled > barWidth {
-		filled = barWidth
-	}
+	// Calculate filled/partial/empty segments
+	fillFloat := float64(barWidth) * pct / 100
+	fullCells := int(fillFloat)
+	partialFraction := fillFloat - float64(fullCells)
 
-	// Pacman-style progress: filled with ━, head with ▶, empty with ─
-	var bar string
-	if p.output.useColor() {
-		bar = Green + strings.Repeat("━", filled)
-		if filled < barWidth {
-			bar += Bold + "▶" + Reset + Dim + strings.Repeat("─", barWidth-filled-1) + Reset
-		}
-		bar += Reset
-	} else {
-		bar = strings.Repeat("#", filled)
-		if filled < barWidth {
-			bar += ">"
-			bar += strings.Repeat("-", barWidth-filled-1)
+	// Build the bar with braille gradient
+	var bar strings.Builder
+	for i := 0; i < barWidth; i++ {
+		if i < fullCells {
+			bar.WriteRune('⣿') // fully filled
+		} else if i == fullCells {
+			// Partial cell — pick gradient character
+			idx := int(partialFraction * float64(len(brailleGradient)-1))
+			if idx >= len(brailleGradient) {
+				idx = len(brailleGradient) - 1
+			}
+			bar.WriteRune(brailleGradient[idx])
+		} else {
+			bar.WriteRune('⠀') // empty (braille blank)
 		}
 	}
 
@@ -267,13 +271,19 @@ func (p *ProgressBar) Set(n int64) {
 	if elapsed > 0 && p.current > 0 {
 		bps := float64(p.current) / elapsed.Seconds()
 		if bps > 1024*1024 {
-			speed = fmt.Sprintf(" %.1f MB/s", bps/1024/1024)
+			speed = fmt.Sprintf("  %.1f MB/s", bps/1024/1024)
 		} else if bps > 1024 {
-			speed = fmt.Sprintf(" %.0f KB/s", bps/1024)
+			speed = fmt.Sprintf("  %.0f KB/s", bps/1024)
 		}
 	}
 
-	fmt.Fprintf(p.output.writer, "\r %s [%s] %3.0f%%%s", p.label, bar, pct, speed)
+	barStr := bar.String()
+	if p.output.useColor() {
+		fmt.Fprintf(p.output.writer, "\r %s [%s%s%s] %s%3.0f%%%s%s",
+			p.label, Green, barStr, Reset, Bold, pct, Reset, speed)
+	} else {
+		fmt.Fprintf(p.output.writer, "\r %s [%s] %3.0f%%%s", p.label, barStr, pct, speed)
+	}
 }
 
 func (p *ProgressBar) Finish() {
