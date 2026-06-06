@@ -1,18 +1,16 @@
-# Standard test environment — downloads dependencies from internet.
-# Use this if you have normal network access (no proxy/VPN issues).
+# Offline test environment — uses vendored dependencies, no network needed
+# during Go build. Use this if you have proxy/VPN/SSL certificate issues.
 #
-# Build: docker build -f Dockerfile.test -t fpm-test .
+# Build: docker build -f Dockerfile.test.offline -t fpm-test .
 # Run:   docker run -it --rm fpm-test bash
 #
-# If you get SSL/TLS errors during build, use Dockerfile.test.offline instead.
+# Prerequisites: run `go mod vendor` locally before building.
 
 FROM golang:latest AS builder
 
 WORKDIR /fpm
-COPY go.mod go.sum ./
-RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -ldflags "-s -w" -o /fpm-bin ./cmd/fpm
+RUN CGO_ENABLED=0 go build -mod=vendor -ldflags "-s -w" -o /fpm-bin ./cmd/fpm
 
 FROM ubuntu:22.04
 
