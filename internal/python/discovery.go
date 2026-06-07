@@ -2,6 +2,8 @@ package python
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -191,6 +193,20 @@ print(json.dumps(result))
 `
 
 func Probe(pythonPath string) (*Interpreter, error) {
+	if cached := loadCachedProbe(pythonPath); cached != nil {
+		return cached, nil
+	}
+
+	interp, err := probeRaw(pythonPath)
+	if err != nil {
+		return nil, err
+	}
+
+	saveCachedProbe(pythonPath, interp)
+	return interp, nil
+}
+
+func probeRaw(pythonPath string) (*Interpreter, error) {
 	cmd := exec.Command(pythonPath, "-c", probeScript)
 	cmd.Env = append(os.Environ(), "PYTHONDONTWRITEBYTECODE=1")
 
@@ -248,4 +264,53 @@ func ReadPythonVersionFile(dir string) (string, error) {
 func WritePythonVersionFile(dir string, version string) error {
 	path := filepath.Join(dir, ".python-version")
 	return os.WriteFile(path, []byte(version+"\n"), 0644)
+}
+
+func interpreterCacheKey(pythonPath string) string {
+	resolved, err := filepath.EvalSymlinks(pythonPath)
+	if err != nil {
+		resolved = pythonPath
+	}
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return ""
+	}
+	raw := fmt.Sprintf("%s:%d", resolved, info.ModTime().UnixNano())
+	h := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(h[:])
+}
+
+func interpreterCacheDir() string {
+	return filepath.Join(config.CacheDir(), "interpreters")
+}
+
+func loadCachedProbe(pythonPath string) *Interpreter {
+	key := interpreterCacheKey(pythonPath)
+	if key == "" {
+		return nil
+	}
+	path := filepath.Join(interpreterCacheDir(), key+".json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var interp Interpreter
+	if json.Unmarshal(data, &interp) != nil {
+		return nil
+	}
+	return &interp
+}
+
+func saveCachedProbe(pythonPath string, interp *Interpreter) {
+	key := interpreterCacheKey(pythonPath)
+	if key == "" {
+		return
+	}
+	dir := interpreterCacheDir()
+	os.MkdirAll(dir, 0755)
+	data, err := json.Marshal(interp)
+	if err != nil {
+		return
+	}
+	os.WriteFile(filepath.Join(dir, key+".json"), data, 0644)
 }

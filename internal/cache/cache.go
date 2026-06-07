@@ -49,6 +49,10 @@ func (c *Cache) Init() error {
 		c.HTTPDir(),
 		c.RefsDir(),
 		c.TmpDir(),
+		c.InterpretersDir(),
+		c.OSVDir(),
+		c.GitDir(),
+		c.EnvironmentsDir(),
 	}
 	for _, d := range dirs {
 		if err := os.MkdirAll(d, 0755); err != nil {
@@ -58,11 +62,15 @@ func (c *Cache) Init() error {
 	return nil
 }
 
-func (c *Cache) CASDir() string    { return filepath.Join(c.Root, "cas", "sha256") }
-func (c *Cache) WheelsDir() string  { return filepath.Join(c.Root, "wheels") }
-func (c *Cache) HTTPDir() string    { return filepath.Join(c.Root, "http") }
-func (c *Cache) RefsDir() string    { return filepath.Join(c.Root, "refs") }
-func (c *Cache) TmpDir() string     { return filepath.Join(c.Root, "tmp") }
+func (c *Cache) CASDir() string          { return filepath.Join(c.Root, "cas", "sha256") }
+func (c *Cache) WheelsDir() string       { return filepath.Join(c.Root, "wheels") }
+func (c *Cache) HTTPDir() string         { return filepath.Join(c.Root, "http") }
+func (c *Cache) RefsDir() string         { return filepath.Join(c.Root, "refs") }
+func (c *Cache) TmpDir() string          { return filepath.Join(c.Root, "tmp") }
+func (c *Cache) InterpretersDir() string { return filepath.Join(c.Root, "interpreters") }
+func (c *Cache) OSVDir() string          { return filepath.Join(c.Root, "osv") }
+func (c *Cache) GitDir() string          { return filepath.Join(c.Root, "git") }
+func (c *Cache) EnvironmentsDir() string { return filepath.Join(c.Root, "environments") }
 
 func (c *Cache) CASPath(key CASKey) string {
 	return filepath.Join(c.CASDir(), key.Prefix(), key.Digest)

@@ -7,8 +7,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/kartikeyyadav/fpm/internal/config"
 	"github.com/kartikeyyadav/fpm/internal/env"
 )
 
@@ -127,7 +131,36 @@ type osvEvent struct {
 	Fixed      string `json:"fixed,omitempty"`
 }
 
+const osvCacheTTL = 1 * time.Hour
+
+func osvCacheDir() string {
+	return filepath.Join(config.CacheDir(), "osv")
+}
+
 func queryOSV(ctx context.Context, name, version string) ([]Vulnerability, error) {
+	cacheFile := filepath.Join(osvCacheDir(), fmt.Sprintf("%s-%s.json", name, version))
+	if data, err := os.ReadFile(cacheFile); err == nil {
+		if info, _ := os.Stat(cacheFile); info != nil && time.Since(info.ModTime()) < osvCacheTTL {
+			var cached []Vulnerability
+			if json.Unmarshal(data, &cached) == nil {
+				return cached, nil
+			}
+		}
+	}
+
+	vulns, err := queryOSVRemote(ctx, name, version)
+	if err != nil {
+		return nil, err
+	}
+
+	os.MkdirAll(osvCacheDir(), 0755)
+	if data, err := json.Marshal(vulns); err == nil {
+		os.WriteFile(cacheFile, data, 0644)
+	}
+	return vulns, nil
+}
+
+func queryOSVRemote(ctx context.Context, name, version string) ([]Vulnerability, error) {
 	query := osvQuery{
 		Package: osvPackage{Name: name, Ecosystem: "PyPI"},
 		Version: version,

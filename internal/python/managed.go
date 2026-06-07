@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -221,10 +222,7 @@ func downloadFile(ctx context.Context, url string) (string, error) {
 }
 
 func extractTarGz(tarball, destDir string) error {
-	// Use system tar for extraction (simpler than pure Go for .tar.gz)
-	// In production, this would use archive/tar + compress/gzip
-	cmd := fmt.Sprintf("tar -xzf %s -C %s --strip-components=1", tarball, destDir)
-	_ = cmd
-	// For now, return a placeholder — real extraction needs os/exec
-	return fmt.Errorf("tar extraction not yet implemented (would use: tar -xzf %s -C %s)", tarball, destDir)
+	cmd := exec.Command("tar", "-xzf", tarball, "-C", destDir, "--strip-components=1")
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }

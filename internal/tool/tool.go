@@ -118,12 +118,22 @@ func (r *Registry) Run(packageName string, args []string) error {
 }
 
 func (r *Registry) runEphemeral(packageName string, args []string) error {
-	// Create temp venv, install, run, cleanup
-	tmpDir, err := os.MkdirTemp("", "fpm-tool-*")
-	if err != nil {
-		return err
+	// Check cached ephemeral environment first
+	envDir := filepath.Join(config.CacheDir(), "environments", packageName)
+	venvPath := filepath.Join(envDir, ".venv")
+	binPath := filepath.Join(venvPath, "bin", packageName)
+
+	if _, err := os.Stat(binPath); err == nil {
+		// Cached environment exists — reuse it
+		execCmd := exec.Command(binPath, args...)
+		execCmd.Stdout = os.Stdout
+		execCmd.Stderr = os.Stderr
+		execCmd.Stdin = os.Stdin
+		return execCmd.Run()
 	}
-	defer os.RemoveAll(tmpDir)
+
+	// Create cached environment
+	os.MkdirAll(envDir, 0755)
 
 	finder := python.NewFinder()
 	interp, err := finder.FindBest("")
@@ -132,7 +142,7 @@ func (r *Registry) runEphemeral(packageName string, args []string) error {
 	}
 
 	v, err := venv.Create(venv.CreateOptions{
-		Path:        filepath.Join(tmpDir, ".venv"),
+		Path:        venvPath,
 		Interpreter: interp,
 	})
 	if err != nil {
@@ -143,11 +153,12 @@ func (r *Registry) runEphemeral(packageName string, args []string) error {
 	cmd := exec.Command(v.PythonPath, "-m", "pip", "install", "--quiet", packageName)
 	cmd.Env = append(os.Environ(), "VIRTUAL_ENV="+v.Path)
 	if output, err := cmd.CombinedOutput(); err != nil {
+		os.RemoveAll(envDir)
 		return fmt.Errorf("failed to install %s: %s", packageName, string(output))
 	}
 
 	// Run
-	binPath := filepath.Join(v.BinDir, packageName)
+	binPath = filepath.Join(v.BinDir, packageName)
 	execCmd := exec.Command(binPath, args...)
 	execCmd.Stdout = os.Stdout
 	execCmd.Stderr = os.Stderr
