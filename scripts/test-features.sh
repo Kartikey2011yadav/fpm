@@ -124,7 +124,28 @@ fpm venv >/dev/null 2>&1 && pass "fpm venv" || fail "fpm venv"
 section "14. Cache"
 fpm cache size >/dev/null 2>&1 && pass "fpm cache size" || fail "cache size"
 
-section "15. Version Flag Variations"
+section "15. Cross-Manager Conflict Detection"
+# uv is installed by pip — fpm should detect and skip
+OUT=$(fpm install -s uv 2>&1)
+echo "$OUT" | grep -q "already installed via pip" && pass "cross-manager: detects pip package" || fail "cross-manager detection"
+echo "$OUT" | grep -q "Nothing to install\|skipping" && pass "cross-manager: skips existing" || fail "cross-manager skip"
+
+section "16. Immutable Package Pinning"
+cd "$WORKDIR"
+mkdir -p immtest && cd immtest
+fpm init . >/dev/null 2>&1
+cat > fpm.toml << 'TOML'
+[project]
+name = "immtest"
+requires-python = ">=3.10"
+dependencies = []
+[immutable]
+packages = [{ name = "click", version = "8.4.1" }]
+TOML
+ERR=$(fpm install "click==7.0" 2>&1 || true)
+echo "$ERR" | grep -q "immutable" && pass "immutable pin blocks wrong version" || fail "immutable pin"
+
+section "17. Version Flag Variations"
 fpm version 2>&1 | grep -q "fpm" && pass "fpm version subcommand" || fail "version subcommand"
 
 # Cleanup

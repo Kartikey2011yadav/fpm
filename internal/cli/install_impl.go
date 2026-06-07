@@ -135,6 +135,31 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
+	// Cross-manager conflict check (ask/install/skip policy)
+	crossChecker := env.NewCrossManagerChecker(scanResult, env.CrossManagerPolicy(cfg.Tool.CrossManagerPolicy))
+	var filteredPackages []resolver.ResolvedPackage
+	for _, pkg := range res.Packages {
+		result := crossChecker.Check(pkg.Name, pkg.Version)
+		switch result.Action {
+		case env.ActionSkip:
+			fmt.Printf("  \033[33m●\033[0m %s\n", result.Message)
+			continue
+		case env.ActionAbort:
+			return fmt.Errorf("%s", result.Message)
+		case env.ActionInstall:
+			if result.Message != "" {
+				fmt.Printf("  \033[33m●\033[0m %s\n", result.Message)
+			}
+		}
+		filteredPackages = append(filteredPackages, pkg)
+	}
+	res.Packages = filteredPackages
+
+	if len(res.Packages) == 0 {
+		fmt.Println("Nothing to install (all packages already available).")
+		return nil
+	}
+
 	// Download and install
 	pkgCache := cache.New(cfg.Cache.Dir)
 	pkgCache.Init()
