@@ -1,569 +1,279 @@
 # Testing Scenarios
 
-Complete testing guide for verifying fpm functionality in a Docker environment.
+Complete testing guide for verifying fpm functionality.
+
+## Quick Test (Automated)
+
+```bash
+# Copy test script to container and run
+docker cp scripts/test-features.sh fpm-test:/tmp/
+docker exec fpm-test bash /tmp/test-features.sh
+```
 
 ## Setup
 
 ```bash
-# Build the test image
-docker build -f Dockerfile.test -t fpm-test .
+# Fresh container with Python + uv + fpm
+docker run -d --name fpm-test python:3.12-slim sleep infinity
+docker exec fpm-test pip install uv --trusted-host pypi.org --trusted-host files.pythonhosted.org
 
-# Run interactive shell
-docker run -it --rm fpm-test bash
+# Build and copy fpm
+GOOS=linux GOARCH=amd64 go build -o bin/fpm-linux ./cmd/fpm
+docker cp bin/fpm-linux fpm-test:/usr/local/bin/fpm
 
-# Verify all tools available
-fpm version
-python3 --version
-pip3 --version
-uv --version
-conda --version
+# Set TLS bypass for VPN environments
+docker exec fpm-test bash -c 'echo "export FPM_ALLOW_INSECURE_HOST=pypi.org,files.pythonhosted.org,api.osv.dev" >> ~/.bashrc'
 ```
 
 ---
 
-## Scenario 1: Project Initialization
-
-**Test:** Create a new project from scratch.
+## Scenario 1: CLI Basics
 
 ```bash
-# Create project
-fpm init myproject
-cd myproject
-
-# Verify files created
-ls -la
-# Expected: pyproject.toml, .python-version, .venv/
-
-cat pyproject.toml
-# Expected: [project] with name, version, requires-python, dependencies
-
-cat .python-version
-# Expected: Python version (e.g., "3.11")
-
-ls .venv/bin/
-# Expected: python3, activate, activate.fish, etc.
-
-# Verify venv works
-source .venv/bin/activate
-python --version
-deactivate
+fpm -v                    # prints version
+fpm --version             # same
+fpm -h                    # shows grouped help
+fpm install -h            # shows install help with examples
+fpm --help | grep system  # --system flag visible
 ```
-
-**Expected:** All files created, venv activates successfully.
 
 ---
 
-## Scenario 2: Package Installation
-
-**Test:** Install packages, verify they resolve and install correctly.
+## Scenario 2: System Install (no venv)
 
 ```bash
-cd myproject
-
-# Install a simple package
+# Without --system: errors (like uv)
 fpm install requests
-# Expected: resolves dependencies (urllib3, certifi, etc.), downloads, installs
+# → error: No virtual environment found
+#   hint: Run `fpm venv` to create an environment, or pass `--system` (`-s`)
 
-# Verify installation
-fpm run python -c "import requests; print(requests.__version__)"
-# Expected: prints version number
+# With --system: installs to system Python
+fpm install -s requests
+fpm install --system flask
 
-# Verify in list
-fpm pip list
-# Expected: shows requests + deps with "fpm" as manager
-
-# Verify pyproject.toml updated
-cat pyproject.toml
-# Expected: dependencies includes "requests"
-
-# Verify lockfile created
-cat fpm.lock
-# Expected: TOML lockfile with all resolved packages + hashes
+# Verify pip sees them
+pip list | grep requests
 ```
 
 ---
 
-## Scenario 3: Version Constraints
+## Scenario 3: Project Workflow
 
 ```bash
-# Install specific version
-fpm install "numpy==1.24.0"
-fpm run python -c "import numpy; print(numpy.__version__)"
-# Expected: "1.24.0"
+mkdir myproject && cd myproject
 
-# Install with range
-fpm install "flask>=2.0,<3.0"
-fpm run python -c "import flask; print(flask.__version__)"
-# Expected: some 2.x version
+# Initialize project
+fpm init .
+# Creates: pyproject.toml, .venv/, .python-version
 
-# Install with extras
-fpm install "requests[security]"
-```
-
----
-
-## Scenario 4: Package Removal
-
-```bash
-# Remove a package
-fpm remove requests
-
-# Verify removed from environment
-fpm run python -c "import requests" 2>&1
-# Expected: ModuleNotFoundError
-
-# Verify removed from pyproject.toml
-grep requests pyproject.toml
-# Expected: no output (not found)
-
-# Verify files cleaned
-ls .venv/lib/python*/site-packages/ | grep requests
-# Expected: no output (removed)
-```
-
----
-
-## Scenario 5: Lock and Sync
-
-```bash
-# Add dependencies to pyproject.toml manually
-cat >> pyproject.toml << 'EOF'
-dependencies = ["flask>=2.0", "click"]
-EOF
-
-# Generate lockfile
-fpm lock
-# Expected: resolves all deps, writes fpm.lock
-
-# Delete venv and recreate
-rm -rf .venv
-fpm venv
-
-# Sync from lockfile
-fpm sync
-# Expected: installs exactly what's in lockfile
+# Install packages (auto-detects venv, no --system needed)
+fpm install requests numpy
 
 # Verify
-fpm run python -c "import flask; print(flask.__version__)"
+fpm run python -c "import requests; print(requests.__version__)"
+fpm list                 # shows fpm packages only
+cat pyproject.toml       # dependencies updated
+cat fpm.lock             # lockfile created
+
+# Lock & sync
+fpm lock
+rm -rf .venv && fpm venv
+fpm sync                 # installs from lockfile
 ```
 
 ---
 
-## Scenario 6: Cross-Manager Coexistence
-
-**Test:** fpm detects packages from pip and handles conflicts.
+## Scenario 4: List Variants
 
 ```bash
-# Install via pip first
-pip install numpy==1.24.0
-
-# Now try fpm install of same version
-fpm install numpy==1.24.0
-# Expected: "numpy 1.24.0 is already installed via pip — skipping download"
-
-# Try different version
-fpm install numpy==1.26.0
-# Expected: prompts about existing 1.24.0 from pip, asks to install/skip/abort
-
-# See all packages from all managers
-fpm pip list --all
-# Expected: shows packages with correct manager attribution (pip/fpm/system)
+fpm list                   # fpm-managed only
+fpm list -a                # all managers (fpm + pip + system)
+fpm list --manager pip     # filter by manager
+fpm list --json            # JSON output
+fpm pip list               # all (pip-compatible)
+fpm pip freeze --system    # requirements format
+fpm pip show --system requests  # package details
 ```
 
 ---
 
-## Scenario 7: Cross-Manager with uv
+## Scenario 5: Error UX
 
 ```bash
-# Install via uv
-uv pip install black
+# Package not found (with suggestion)
+fpm install -s request
+# → error: Package "request" not found on PyPI
+#   hint: Did you mean "requests"?
 
-# Check fpm detects it
-fpm pip list --all
-# Expected: shows black with manager "uv"
+# TLS failure (without insecure bypass)
+unset FPM_ALLOW_INSECURE_HOST
+fpm install -s requests
+# → error: TLS certificate verification failed
+#   hint: Try --allow-insecure-host pypi.org ...
 
-# Install via fpm
-fpm install ruff
-
-# Both should be visible
-fpm pip list --all
-# Expected: black (uv) + ruff (fpm)
+# Per-host bypass
+fpm install --allow-insecure-host pypi.org --allow-insecure-host files.pythonhosted.org -s httpx
 ```
 
 ---
 
-## Scenario 8: Cross-Manager with conda
+## Scenario 6: Environment Snapshots
 
 ```bash
-# Install via conda
-conda install -y scipy
+cd myproject  # must be in a project with .venv
 
-# Check fpm detects it
-fpm pip list --all
-# Expected: shows scipy with manager "conda"
-```
-
----
-
-## Scenario 9: Environment Snapshots
-
-```bash
-cd myproject
-
-# Create initial snapshot
+# Create snapshot
 fpm install requests flask
 fpm snapshot create "base setup"
 
-# Add more packages
-fpm install pandas numpy
-fpm snapshot create "added data science"
+# Add more
+fpm install pandas
+fpm snapshot create "added pandas"
 
-# View history
+# List
 fpm snapshot list
-# Expected: 2 snapshots with timestamps and messages
+# Shows: ID, timestamp, package count, message
 
-# Compare snapshots
+# Diff
 fpm snapshot diff <id1> <id2>
-# Expected: shows added packages
-
-# Restore first snapshot
-fpm snapshot restore <id1>
-# Expected: removes pandas/numpy, keeps requests/flask
-
-# Verify state
-fpm run python -c "import requests; print('ok')"  # works
-fpm run python -c "import pandas" 2>&1            # fails (removed)
-```
-
----
-
-## Scenario 10: Snapshot with External Manager Changes
-
-```bash
-# Take snapshot with pip package
-pip install httpx
-fpm snapshot create "with httpx from pip"
-
-# Pip changes something
-pip install httpx==0.25.0  # different version
-
-# Compare
-fpm snapshot diff <id>
-# Expected: shows httpx version drift
+# Shows: + pandas, + python-dateutil, + six, etc.
 
 # Restore
-fpm snapshot restore <id>
-# Expected: warns about httpx version mismatch from pip
-```
-
----
-
-## Scenario 11: Python Version Management
-
-```bash
-# List available
-fpm python list
-# Expected: shows system Python
-
-# Install a version
-fpm python install 3.11
-# Expected: downloads and installs
-
-# Create venv with specific Python
-fpm venv --python 3.11 .venv-311
-# Expected: creates venv using 3.11
+fpm snapshot restore <id1>
+# Removes pandas, keeps requests/flask
 
 # Verify
-.venv-311/bin/python --version
-# Expected: Python 3.11.x
-
-# Pin for project
-fpm python pin 3.11
-cat .python-version
-# Expected: "3.11"
+fpm run python -c "import requests"   # works
+fpm run python -c "import pandas"     # fails (removed)
 ```
 
 ---
 
-## Scenario 12: Virtual Environment Isolation
+## Scenario 7: Audit
 
 ```bash
-# System Python version
-python3 --version
-# Expected: system version (e.g., 3.10)
-
-# Create venv with different Python
-fpm venv --python 3.12
-
-# Venv has different Python
-.venv/bin/python --version
-# Expected: 3.12.x (different from system)
-
-# System Python unchanged
-python3 --version
-# Expected: still system version
+fpm audit --system           # scan system packages
+fpm audit                    # scan venv packages (in project)
+# Shows vulnerabilities with ID, severity, fix version
+# Second run is instant (OSV cache, 1hr TTL)
 ```
 
 ---
 
-## Scenario 13: Cache Management
+## Scenario 8: Dependency Tree
 
 ```bash
-# Install some packages to populate cache
-fpm install requests numpy flask
-
-# Check cache size
-fpm cache size
-# Expected: shows non-zero sizes for CAS, wheels, etc.
-
-# List unused (after removing from env)
-fpm remove numpy
-fpm cache list-unused
-# Expected: numpy appears as unreferenced
-
-# Garbage collect
-fpm cache gc
-# Expected: removes unreferenced entries, shows freed space
-
-# Verify
-fpm cache size
-# Expected: smaller than before
-```
-
----
-
-## Scenario 14: Tool Management
-
-```bash
-# Install a CLI tool
-fpm tool install black
-# Expected: creates isolated env, installs black
-
-# Verify tool works
-fpm tool run black --version
-# Expected: shows black version
-
-# List tools
-fpm tool list
-# Expected: shows black with entrypoints
-
-# Direct execution (if bin is on PATH)
-black --version
-
-# Uninstall
-fpm tool uninstall black
-fpm tool list
-# Expected: empty
-```
-
----
-
-## Scenario 15: Vulnerability Auditing
-
-```bash
-# Install packages (some may have known vulns)
-fpm install requests==2.25.0
-
-# Audit
-fpm audit
-# Expected: may report vulnerabilities for older versions
-# Shows: ID, severity, summary, fix version
-```
-
----
-
-## Scenario 16: Dependency Tree
-
-```bash
+cd myproject
 fpm install flask
-
 fpm tree
-# Expected:
-# flask 2.3.0
-# ├── werkzeug 2.3.0
-# ├── jinja2 3.1.2
-# │   └── markupsafe 2.1.3
-# ├── click 8.1.7
+# flask 3.1.3
+# ├── werkzeug 3.1.8
+# ├── jinja2 3.1.6
+# │   └── markupsafe 3.0.3
+# ├── click 8.4.1
 # └── ...
 
-fpm tree --invert
-# Expected: shows reverse deps (who requires what)
+fpm tree --depth 1     # limit depth
+fpm tree --invert      # reverse deps
 ```
 
 ---
 
-## Scenario 17: Build and Publish
+## Scenario 9: Python Version Management
 
 ```bash
-# Create a simple package
-mkdir -p src/mylib
-cat > src/mylib/__init__.py << 'EOF'
-__version__ = "0.1.0"
-EOF
-
-cat > pyproject.toml << 'EOF'
-[project]
-name = "mylib"
-version = "0.1.0"
-[build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
-EOF
-
-# Build
-fpm build
-# Expected: creates dist/mylib-0.1.0-py3-none-any.whl and .tar.gz
-
-ls dist/
-# Expected: .whl and .tar.gz files
-
-# Publish (to test PyPI)
-fpm publish --repository testpypi --token $TEST_PYPI_TOKEN
+fpm python list              # shows system + managed Pythons
+fpm python install 3.11      # downloads from python-build-standalone
+fpm python list              # now shows 3.11 as managed
+fpm python use 3.11 --system # updates ~/.local/bin symlinks
+fpm python pin 3.11          # writes .python-version
 ```
 
 ---
 
-## Scenario 18: Global vs Local Scope
+## Scenario 10: Tool Management
 
 ```bash
-# Local install (default)
-fpm install requests
-# Only visible in current venv
-
-# Global install
-fpm install httpie --global
-# Available system-wide
-
-# Verify isolation
-deactivate
-python3 -c "import httpie"  # works (global)
-python3 -c "import requests"  # may fail (local only)
+fpm tool install black       # isolated venv + symlink
+fpm tool list                # shows installed tools
+fpm tool run ruff --version  # ephemeral (cached after first run)
+fpm tool run ruff --version  # instant (reuses cached env)
+fpm tool uninstall black     # removes
 ```
 
 ---
 
-## Scenario 19: Immutable Packages
+## Scenario 11: Config & Repair
 
 ```bash
-# Configure immutable package
-cat > fpm.toml << 'EOF'
-[project]
-name = "test"
-dependencies = []
-
-[immutable]
-packages = [
-    { name = "numpy", version = "1.24.0" }
-]
-EOF
-
-# Install the pinned version
-fpm install numpy==1.24.0
-# Expected: installs successfully
-
-# Try to install different version
-fpm install numpy==2.0.0
-# Expected: ERROR — numpy is pinned as immutable at 1.24.0
-
-# Install something that depends on a different numpy
-fpm install scipy
-# Expected: resolver finds scipy version compatible with numpy 1.24.0
-# OR: clear error explaining the conflict
+fpm config show              # all directories + settings
+fpm config set cache.dir /tmp/fpm-cache  # change setting
+fpm repair                   # check + fix issues
 ```
 
 ---
 
-## Scenario 20: Self-Update
+## Scenario 12: Cache Management
 
 ```bash
-fpm version
-# Expected: current version
-
-fpm self update
-# Expected: checks GitHub, downloads if newer version available
+fpm cache size               # show breakdown
+fpm cache gc                 # remove unreferenced
+fpm cache clean              # remove everything
 ```
 
 ---
 
-## Scenario 21: Error Handling
+## Scenario 13: Remove & Aliases
 
 ```bash
-# Non-existent package
-fpm install this-package-definitely-does-not-exist-12345
-# Expected: clear error message with hint
-
-# Invalid version specifier
-fpm install "numpy==invalid"
-# Expected: parse error with helpful message
-
-# No venv found
-cd /tmp
-fpm install requests
-# Expected: "no virtual environment found. Run 'fpm init' or 'fpm venv' first"
-
-# Network failure (disconnect network)
-fpm install requests
-# Expected: clear timeout/connection error
+fpm remove flask             # removes from pyproject.toml
+fpm uninstall numpy          # alias for remove
+fpm rm click                 # short alias
 ```
 
 ---
 
-## Scenario 22: PEP 723 Script Support
+## Scenario 14: Cross-Manager Detection
 
 ```bash
-cat > script.py << 'EOF'
-# /// script
-# dependencies = ["requests"]
-# requires-python = ">=3.10"
-# ///
-import requests
-print(requests.get("https://httpbin.org/get").status_code)
-EOF
+# Install via pip
+pip install httpx
 
-fpm run script.py
-# Expected: installs requests in ephemeral env, runs script, prints 200
+# fpm detects it
+fpm list -a | grep httpx     # shows with manager "pip"
+
+# Install via fpm
+fpm install -s requests
+
+# Both visible
+fpm list -a                  # shows pip + fpm packages
 ```
 
 ---
 
-## Scenario 23: Concurrent Operations (stress test)
+## Scenario 15: Global Flags
 
 ```bash
-# Multiple installs in parallel
-fpm install requests numpy pandas scipy matplotlib &
-fpm install flask django celery &
-wait
-# Expected: no corruption, all packages installed correctly
-```
-
----
-
-## Scenario 24: Large Dependency Tree
-
-```bash
-# Install something with many transitive deps
-fpm install jupyterlab
-# Expected: resolves 50+ packages, installs all correctly
-
-fpm tree --depth 2
-# Expected: shows full tree without errors
+fpm list --json              # JSON output
+NO_COLOR=1 fpm list          # no ANSI colors
+fpm install -s --verbose requests  # verbose output
+fpm install -s --quiet requests    # silent except errors
 ```
 
 ---
 
 ## Verification Checklist
 
-After all scenarios, verify:
+After all scenarios:
 
-- [ ] `fpm pip list --all` shows all packages with correct managers
-- [ ] `fpm cache size` shows reasonable numbers
-- [ ] `fpm snapshot list` shows all created snapshots
-- [ ] No orphaned files in site-packages
-- [ ] .venv/bin/ has correct symlinks
-- [ ] pyproject.toml reflects current state
-- [ ] fpm.lock is consistent with installed packages
-- [ ] No permission errors
-- [ ] Colored output works (and `NO_COLOR=1` disables it)
-- [ ] `--json` flag produces valid JSON
-- [ ] `--quiet` suppresses output
-- [ ] `--verbose` shows debug info
+- [ ] `fpm list -a` shows correct managers for each package
+- [ ] `fpm -v` prints version
+- [ ] `fpm -h` shows grouped commands
+- [ ] `fpm install` without venv/--system errors clearly
+- [ ] `fpm repair` finds and fixes issues
+- [ ] `fpm config show` displays all paths
+- [ ] No `fpm.lock` generated outside projects
+- [ ] Snapshots scoped to venv (not system)
+- [ ] Audit uses cache on second run
+- [ ] Tool run reuses cached environment
+- [ ] Error messages show hints with actionable commands
