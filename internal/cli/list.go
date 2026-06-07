@@ -8,19 +8,17 @@ var listCmd = &cobra.Command{
 	Use:     "list",
 	Aliases: []string{"ls"},
 	Short:   "List installed packages",
-	Long: `List all packages installed in the current environment.
-Shows packages from all managers (fpm, pip, uv, conda, etc.).
-Without a virtual environment, shows system-wide packages.
-
-Use --global to explicitly target system packages even when inside a venv.`,
-	Example: `  # List packages in current environment
+	Long: `List packages managed by fpm in the current environment.
+Use --all (-a) to show packages from all managers (pip, uv, conda, etc.).
+Use --manager to filter by a specific manager.`,
+	Example: `  # List fpm-managed packages
   fpm list
 
-  # List system-wide packages
-  fpm list --global
+  # List ALL packages (fpm + pip + system + etc.)
+  fpm list -a
 
-  # Filter by manager
-  fpm list --manager fpm
+  # Filter by a specific manager
+  fpm list --manager pip
 
   # JSON output
   fpm list --json`,
@@ -29,7 +27,7 @@ Use --global to explicitly target system packages even when inside a venv.`,
 }
 
 func init() {
-	listCmd.Flags().Bool("all", false, "Show packages from all site-packages (including system)")
+	listCmd.Flags().BoolP("all", "a", false, "Show all packages from all managers")
 	listCmd.Flags().String("manager", "", "Filter by manager (fpm, pip, uv, conda, poetry, pdm, system)")
 	rootCmd.AddCommand(listCmd)
 }

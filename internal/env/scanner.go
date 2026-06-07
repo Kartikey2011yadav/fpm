@@ -215,12 +215,10 @@ func detectManagerFromPath(distInfoPath string) PackageManager {
 	switch {
 	case strings.Contains(lower, "conda"):
 		return ManagerConda
-	case strings.Contains(lower, "/usr/lib/python"):
-		return ManagerSystem
-	case strings.Contains(lower, "/usr/local/lib/python"):
+	case strings.Contains(lower, "/usr/lib/python") && !strings.Contains(lower, "/usr/local/"):
 		return ManagerSystem
 	default:
-		return ManagerUnknown
+		return ManagerPip
 	}
 }
 
