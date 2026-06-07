@@ -18,6 +18,7 @@ import (
 	"github.com/kartikeyyadav/fpm/internal/resolver"
 	"github.com/kartikeyyadav/fpm/internal/venv"
 	"github.com/kartikeyyadav/fpm/internal/workspace"
+	fpmErrors "github.com/kartikeyyadav/fpm/pkg/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -123,7 +124,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		Immutables: cfg.Immutable.Packages,
 	}).Resolve(requirements)
 	if err != nil {
-		return fmt.Errorf("resolution failed: %w", err)
+		return wrapResolutionError(err, args)
 	}
 
 	if len(res.Packages) == 0 {
@@ -210,4 +211,58 @@ func runInstall(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("\n\033[32m🚀 Done: %d package(s) installed.\033[0m\n", installed)
 	return nil
+}
+
+func wrapResolutionError(err error, args []string) error {
+	msg := err.Error()
+
+	// Detect 404 (package not found)
+	if strings.Contains(msg, "HTTP 404") {
+		pkgName := ""
+		if len(args) == 1 {
+			pkgName = args[0]
+		}
+
+		fpmErr := &fpmErrors.FpmError{
+			Message:  fmt.Sprintf("Package %q not found on PyPI", pkgName),
+			Cause:    err,
+			ExitCode: fpmErrors.ExitFailure,
+		}
+
+		if pkgName != "" {
+			if suggestion := client.SuggestPackage(pkgName); suggestion != "" {
+				fpmErr.Hint = fmt.Sprintf("Did you mean %q?\nRun: fpm install %s", suggestion, suggestion)
+			} else {
+				fpmErr.Hint = "Check the package name at https://pypi.org"
+			}
+		}
+		return fpmErr
+	}
+
+	// Detect TLS/certificate errors
+	if strings.Contains(msg, "x509") || strings.Contains(msg, "certificate") || strings.Contains(msg, "tls:") {
+		return &fpmErrors.FpmError{
+			Message:  "TLS certificate verification failed",
+			Cause:    err,
+			ExitCode: fpmErrors.ExitFailure,
+			Hint:     "Your network may be intercepting HTTPS connections (VPN/proxy).\nTry: fpm install --allow-insecure-host pypi.org --allow-insecure-host files.pythonhosted.org <package>\n Or: export FPM_INSECURE=1",
+		}
+	}
+
+	// Detect network errors
+	if strings.Contains(msg, "dial tcp") || strings.Contains(msg, "no such host") || strings.Contains(msg, "connection refused") {
+		return &fpmErrors.FpmError{
+			Message:  "Network connection failed",
+			Cause:    err,
+			ExitCode: fpmErrors.ExitFailure,
+			Hint:     "Check your internet connection and proxy settings.",
+		}
+	}
+
+	// Default: just wrap with cleaner message
+	return &fpmErrors.FpmError{
+		Message:  "Dependency resolution failed",
+		Cause:    err,
+		ExitCode: fpmErrors.ExitFailure,
+	}
 }

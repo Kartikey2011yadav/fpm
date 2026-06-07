@@ -1,9 +1,6 @@
 package cli
 
 import (
-	"fmt"
-	"os"
-
 	"github.com/spf13/cobra"
 )
 
@@ -56,7 +53,7 @@ func Execute() error {
 
 	err := rootCmd.Execute()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "\033[31merror:\033[0m %v\n", err)
+		formatError(err)
 	}
 	return err
 }
