@@ -9,7 +9,7 @@ import (
 func init() {
 	rootCmd.Version = Version
 	rootCmd.SetVersionTemplate("fpm {{.Version}}\n")
-	rootCmd.Flags().BoolP("version", "V", false, "Print version information")
+	rootCmd.Flags().BoolP("version", "v", false, "Print version information")
 }
 
 func TestHelpContainsAllCommands(t *testing.T) {
@@ -58,8 +58,8 @@ func TestVersionFlagRegistered(t *testing.T) {
 	if f == nil {
 		t.Fatal("--version flag not registered")
 	}
-	if f.Shorthand != "V" {
-		t.Errorf("expected shorthand 'V', got %q", f.Shorthand)
+	if f.Shorthand != "v" {
+		t.Errorf("expected shorthand 'v', got %q", f.Shorthand)
 	}
 }
 

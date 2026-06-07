@@ -30,7 +30,7 @@ Get started:
 }
 
 func init() {
-	rootCmd.PersistentFlags().BoolVarP(&flagVerbose, "verbose", "v", false, "Enable verbose output")
+	rootCmd.PersistentFlags().BoolVar(&flagVerbose, "verbose", false, "Enable verbose output")
 	rootCmd.PersistentFlags().BoolVarP(&flagQuiet, "quiet", "q", false, "Suppress all output except errors")
 	rootCmd.PersistentFlags().StringVar(&flagColor, "color", "auto", "Control color output (auto, always, never)")
 	rootCmd.PersistentFlags().BoolVar(&flagNoProgress, "no-progress", false, "Disable progress bars")
@@ -49,7 +49,7 @@ func init() {
 func Execute() error {
 	rootCmd.Version = Version
 	rootCmd.SetVersionTemplate("fpm {{.Version}}\n")
-	rootCmd.Flags().BoolP("version", "V", false, "Print version information")
+	rootCmd.Flags().BoolP("version", "v", false, "Print version information")
 
 	err := rootCmd.Execute()
 	if err != nil {
