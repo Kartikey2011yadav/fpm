@@ -81,10 +81,6 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		if flagGlobal && activeVenv != nil {
 			fmt.Printf("  \033[33m●\033[0m Installing globally (--global flag)\n")
 			fmt.Printf("    \033[2mTarget: %s\033[0m\n\n", targetSitePackages)
-		} else if activeVenv == nil {
-			fmt.Printf("  \033[33m●\033[0m No virtual environment detected — installing to system Python\n")
-			fmt.Printf("    \033[2mTarget: %s\033[0m\n", targetSitePackages)
-			fmt.Printf("    \033[2mTip: Run 'fpm init' to create a project with isolated environment\033[0m\n\n")
 		}
 	}
 
@@ -196,18 +192,19 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  \033[32m✓\033[0m \033[1m%s\033[0m \033[36m%s\033[0m\n", pkg.Name.Raw(), pkg.Version.String())
 	}
 
-	// Update pyproject.toml if it exists
-	pyproject, err := workspace.ReadPyProjectToml(cwd)
-	if err == nil {
-		for _, arg := range args {
-			pyproject.AddDependency(arg)
+	// Update pyproject.toml and lockfile only when in a project (not global installs)
+	if activeVenv != nil && !flagGlobal {
+		pyproject, err := workspace.ReadPyProjectToml(cwd)
+		if err == nil {
+			for _, arg := range args {
+				pyproject.AddDependency(arg)
+			}
+			workspace.WritePyProjectToml(cwd, pyproject)
 		}
-		workspace.WritePyProjectToml(cwd, pyproject)
-	}
 
-	// Generate/update lockfile
-	lf := lock.Generate(res, "")
-	lf.Write(filepath.Join(cwd, lock.LockFileName))
+		lf := lock.Generate(res, "")
+		lf.Write(filepath.Join(cwd, lock.LockFileName))
+	}
 
 	fmt.Printf("\n\033[32m🚀 Done: %d package(s) installed.\033[0m\n", installed)
 	return nil
