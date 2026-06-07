@@ -36,7 +36,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 	// Find venv
 	activeVenv, err := venv.Detect(cwd)
 	if err != nil {
-		return fmt.Errorf("no virtual environment found. Run 'fpm init' or 'fpm venv' first")
+		return fmt.Errorf("no virtual environment found.\nRun 'fpm venv' to create one, or 'fpm init' to start a new project")
 	}
 
 	// Scan current environment
@@ -82,10 +82,15 @@ func runSync(cmd *cobra.Command, args []string) error {
 		pkgCache.Init()
 		refTracker := cache.NewRefTracker(pkgCache)
 
+		networkCfg := cfg.Network
+		if len(flagAllowInsecureHost) > 0 {
+			networkCfg.AllowInsecureHost = append(networkCfg.AllowInsecureHost, flagAllowInsecureHost...)
+		}
 		pypiClient := client.New(client.ClientOptions{
 			Indexes:     cfg.Indexes,
 			CacheDir:    filepath.Join(cfg.Cache.Dir, "http"),
 			Concurrency: cfg.Tool.Concurrency,
+			Network:     networkCfg,
 		})
 
 		ctx := context.Background()

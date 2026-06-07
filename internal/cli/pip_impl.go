@@ -134,12 +134,18 @@ func runPipList(cmd *cobra.Command, args []string) error {
 
 func runPipFreeze(cmd *cobra.Command, args []string) error {
 	cwd, _ := os.Getwd()
-	activeVenv, err := venv.Detect(cwd)
-	if err != nil {
-		return fmt.Errorf("no virtual environment found")
+	activeVenv, _ := venv.Detect(cwd)
+
+	var dirs []string
+	if activeVenv != nil && !flagSystem {
+		dirs = []string{activeVenv.SitePackages}
+	} else {
+		dirs = findSystemSitePackages()
+		if len(dirs) == 0 {
+			return fmt.Errorf("no Python environment found")
+		}
 	}
 
-	dirs := []string{activeVenv.SitePackages}
 	scanner := env.NewScanner(dirs)
 	result, _ := scanner.Scan()
 
@@ -156,15 +162,21 @@ func runPipInstall(cmd *cobra.Command, args []string) error {
 
 func runPipShow(cmd *cobra.Command, args []string) error {
 	cwd, _ := os.Getwd()
-	activeVenv, err := venv.Detect(cwd)
-	if err != nil {
-		return fmt.Errorf("no virtual environment found")
+	activeVenv, _ := venv.Detect(cwd)
+
+	var dirs []string
+	if activeVenv != nil && !flagSystem {
+		dirs = []string{activeVenv.SitePackages}
+		if activeVenv.Interpreter != nil {
+			dirs = append(dirs, env.FindSitePackagesDirs(activeVenv.Interpreter.SysPaths)...)
+		}
+	} else {
+		dirs = findSystemSitePackages()
+		if len(dirs) == 0 {
+			return fmt.Errorf("no Python environment found")
+		}
 	}
 
-	dirs := []string{activeVenv.SitePackages}
-	if activeVenv.Interpreter != nil {
-		dirs = append(dirs, env.FindSitePackagesDirs(activeVenv.Interpreter.SysPaths)...)
-	}
 	scanner := env.NewScanner(dirs)
 	result, _ := scanner.Scan()
 

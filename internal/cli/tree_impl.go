@@ -19,7 +19,7 @@ func runTree(cmd *cobra.Command, args []string) error {
 
 	lf, err := lock.Read(lockPath)
 	if err != nil {
-		return fmt.Errorf("no lockfile found. Run 'fpm lock' first")
+		return fmt.Errorf("no lockfile (fpm.lock) found in current directory.\nRun 'fpm init' to create a project, or 'fpm lock' to generate a lockfile")
 	}
 
 	depth, _ := cmd.Flags().GetInt("depth")

@@ -30,7 +30,7 @@ func runRun(cmd *cobra.Command, args []string) error {
 	// Find virtual environment
 	activeVenv, err := venv.Detect(cwd)
 	if err != nil {
-		return fmt.Errorf("no virtual environment found. Run 'fpm init' or 'fpm venv' first")
+		return fmt.Errorf("no virtual environment found.\nRun 'fpm venv' to create one, or 'fpm init' to start a new project")
 	}
 
 	// Execute command with venv's bin on PATH
