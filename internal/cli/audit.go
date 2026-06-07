@@ -18,13 +18,19 @@ var auditCmd = &cobra.Command{
 	GroupID: "package",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cwd, _ := os.Getwd()
-		activeVenv, err := venv.Detect(cwd)
-		if err != nil {
-			return fmt.Errorf("no virtual environment found")
+		activeVenv, _ := venv.Detect(cwd)
+
+		var dirs []string
+		if activeVenv != nil && !flagSystem {
+			dirs = []string{activeVenv.SitePackages}
+		} else if flagSystem || activeVenv == nil {
+			sysDirs := findSystemSitePackages()
+			if len(sysDirs) == 0 {
+				return fmt.Errorf("no Python environment found")
+			}
+			dirs = sysDirs
 		}
 
-		// Scan all installed packages
-		dirs := []string{activeVenv.SitePackages}
 		scanner := env.NewScanner(dirs)
 		result, err := scanner.Scan()
 		if err != nil {
