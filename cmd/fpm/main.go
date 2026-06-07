@@ -3,6 +3,8 @@ package main
 import (
 	"os"
 
+	_ "github.com/breml/rootcerts"
+
 	"github.com/kartikeyyadav/fpm/internal/cli"
 )
 

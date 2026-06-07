@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -14,6 +15,7 @@ type Config struct {
 	Python    PythonConfig    `toml:"python"`
 	Cache     CacheConfig     `toml:"cache"`
 	Indexes   []IndexConfig   `toml:"index"`
+	Network   NetworkConfig   `toml:"network"`
 }
 
 type ProjectConfig struct {
@@ -50,9 +52,16 @@ type CacheConfig struct {
 }
 
 type IndexConfig struct {
-	Name string `toml:"name"`
-	URL  string `toml:"url"`
-	Default bool `toml:"default"`
+	Name    string `toml:"name"`
+	URL     string `toml:"url"`
+	Default bool   `toml:"default"`
+}
+
+type NetworkConfig struct {
+	AllowInsecureHost []string `toml:"allow-insecure-host"`
+	SystemCerts       bool     `toml:"system-certs"`
+	ClientCert        string   `toml:"client-cert"`
+	ClientKey         string   `toml:"client-key"`
 }
 
 func DefaultConfig() *Config {
@@ -119,6 +128,22 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if v := os.Getenv("FPM_CROSS_MANAGER_POLICY"); v != "" {
 		cfg.Tool.CrossManagerPolicy = v
+	}
+	if v := os.Getenv("FPM_ALLOW_INSECURE_HOST"); v != "" {
+		var hosts []string
+		for _, h := range strings.Split(v, ",") {
+			h = strings.TrimSpace(h)
+			if h != "" {
+				hosts = append(hosts, h)
+			}
+		}
+		cfg.Network.AllowInsecureHost = append(cfg.Network.AllowInsecureHost, hosts...)
+	}
+	if v := os.Getenv("FPM_SYSTEM_CERTS"); v == "1" || v == "true" {
+		cfg.Network.SystemCerts = true
+	}
+	if v := os.Getenv("SSL_CLIENT_CERT"); v != "" {
+		cfg.Network.ClientCert = v
 	}
 }
 

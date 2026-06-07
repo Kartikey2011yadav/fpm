@@ -7,6 +7,9 @@ import (
 var pipCmd = &cobra.Command{
 	Use:   "pip",
 	Short: "pip-compatible interface",
+	Long: `A pip-compatible interface for users migrating from pip.
+Commands mirror pip's behavior while using fpm's resolver and cache.`,
+	GroupID: "advanced",
 }
 
 var pipInstallCmd = &cobra.Command{

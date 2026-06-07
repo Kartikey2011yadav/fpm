@@ -7,6 +7,17 @@ import (
 var toolCmd = &cobra.Command{
 	Use:   "tool",
 	Short: "Manage Python CLI tools",
+	Long: `Install and run Python CLI tools in isolated environments.
+Similar to pipx — each tool gets its own venv, avoiding conflicts.`,
+	Example: `  # Run a tool without installing
+  fpm tool run black .
+
+  # Install a tool permanently
+  fpm tool install ruff
+
+  # List installed tools
+  fpm tool list`,
+	GroupID: "advanced",
 }
 
 var toolRunCmd = &cobra.Command{

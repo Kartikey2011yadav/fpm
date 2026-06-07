@@ -25,6 +25,7 @@ independent snapshot history. This means:
   - Global environment has its own snapshot history (use --global)
 
 Think of it as git for your Python environment.`,
+	GroupID: "environment",
 }
 
 var snapshotCreateCmd = &cobra.Command{

@@ -7,6 +7,10 @@ import (
 var cacheCmd = &cobra.Command{
 	Use:   "cache",
 	Short: "Manage the package cache",
+	Long: `Inspect and manage the content-addressable package cache.
+fpm caches downloaded wheels to avoid re-downloading and uses
+hard/reflinks to save disk space across environments.`,
+	GroupID: "advanced",
 }
 
 var cacheCleanCmd = &cobra.Command{

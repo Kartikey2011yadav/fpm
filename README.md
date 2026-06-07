@@ -97,48 +97,53 @@ fpm run python main.py
 fpm snapshot create "initial setup"
 
 # See what's installed (from ALL managers)
-fpm pip list --all
+fpm list
 ```
 
 ## CLI Reference
 
-| Command                     | Description                         |
-| --------------------------- | ----------------------------------- |
-| `fpm init [path]`           | Create a new Python project         |
-| `fpm install <pkg>`         | Install packages (alias: `fpm add`) |
-| `fpm remove <pkg>`          | Remove packages                     |
-| `fpm sync`                  | Sync environment from lockfile      |
-| `fpm lock`                  | Generate/update lockfile            |
-| `fpm run <cmd>`             | Run command in managed environment  |
-| `fpm tree`                  | Display dependency tree             |
-| `fpm venv [path]`           | Create virtual environment          |
-| `fpm python list`           | List Python versions                |
-| `fpm python install <ver>`  | Install Python version              |
-| `fpm python use <ver>`      | Switch Python (local or `--global`) |
-| `fpm snapshot create [msg]` | Capture environment state           |
-| `fpm snapshot list`         | Show snapshot history               |
-| `fpm snapshot restore <id>` | Restore previous state              |
-| `fpm snapshot diff <id>`    | Compare snapshots                   |
-| `fpm cache size`            | Show cache usage                    |
-| `fpm cache gc`              | Remove unreferenced packages        |
-| `fpm cache list-unused`     | Show orphaned cache entries         |
-| `fpm build`                 | Build wheel/sdist                   |
-| `fpm publish`               | Upload to PyPI                      |
-| `fpm pip list`              | List all packages (all managers)    |
-| `fpm pip freeze`            | Output requirements format          |
-| `fpm tool run <pkg>`        | Run tool in ephemeral env           |
-| `fpm tool install <pkg>`    | Install tool permanently            |
+| Command                     | Description                                    |
+| --------------------------- | ---------------------------------------------- |
+| `fpm init [path]`           | Create a new Python project                    |
+| `fpm install <pkg>`         | Install packages (aliases: `add`)              |
+| `fpm remove <pkg>`          | Remove packages (aliases: `uninstall`, `rm`)   |
+| `fpm list`                  | List installed packages (alias: `ls`)          |
+| `fpm sync`                  | Sync environment from lockfile                 |
+| `fpm lock`                  | Generate/update lockfile                       |
+| `fpm run <cmd>`             | Run command in managed environment             |
+| `fpm tree`                  | Display dependency tree                        |
+| `fpm audit`                 | Scan for known vulnerabilities                 |
+| `fpm venv [path]`           | Create virtual environment                     |
+| `fpm python list`           | List Python versions                           |
+| `fpm python install <ver>`  | Install Python version                         |
+| `fpm python use <ver>`      | Switch Python (local or `--global`)            |
+| `fpm snapshot create [msg]` | Capture environment state                      |
+| `fpm snapshot list`         | Show snapshot history                          |
+| `fpm snapshot restore <id>` | Restore previous state                         |
+| `fpm snapshot diff <id>`    | Compare snapshots                              |
+| `fpm cache size`            | Show cache usage                               |
+| `fpm cache gc`              | Remove unreferenced packages                   |
+| `fpm cache list-unused`     | Show orphaned cache entries                    |
+| `fpm build`                 | Build wheel/sdist                              |
+| `fpm publish`               | Upload to PyPI                                 |
+| `fpm pip list`              | List all packages (all managers)               |
+| `fpm pip freeze`            | Output requirements format                     |
+| `fpm tool run <pkg>`        | Run tool in ephemeral env                      |
+| `fpm tool install <pkg>`    | Install tool permanently                       |
+| `fpm version`               | Show version (also: `fpm --version`, `fpm -V`) |
 
 ### Global Flags
 
-| Flag             | Description                                  |
-| ---------------- | -------------------------------------------- |
-| `--global`       | Apply to system environment instead of local |
-| `--verbose`      | Enable verbose output                        |
-| `--quiet`        | Suppress output except errors                |
-| `--json`         | Output in JSON format                        |
-| `--no-progress`  | Disable progress bars                        |
-| `--color <mode>` | Control colors (auto/always/never)           |
+| Flag                           | Description                                  |
+| ------------------------------ | -------------------------------------------- |
+| `-V`, `--version`              | Print version and exit                       |
+| `--global`                     | Apply to system environment instead of local |
+| `--verbose`, `-v`              | Enable verbose output                        |
+| `--quiet`, `-q`                | Suppress output except errors                |
+| `--json`                       | Output in JSON format                        |
+| `--no-progress`                | Disable progress bars                        |
+| `--color <mode>`               | Control colors (auto/always/never)           |
+| `--allow-insecure-host <host>` | Skip TLS verification for specific hosts     |
 
 ## Environment Snapshots
 
@@ -170,7 +175,7 @@ fpm detects packages from: **pip, uv, conda, poetry, pdm, system**
 
 ```bash
 # See everything in your environment
-fpm pip list --all
+fpm list --all
 # Package                  Version    Manager  Location
 # numpy                    1.24.0     pip      /usr/lib/python3.11/...
 # requests                 2.31.0     fpm      .venv/lib/python3.11/...
@@ -247,7 +252,46 @@ dir = "/custom/cache/path"  # override default cache location
 | `FPM_INDEX_URL`            | Override PyPI index URL                          |
 | `FPM_CROSS_MANAGER_POLICY` | Set cross-manager policy                         |
 | `FPM_PUBLISH_TOKEN`        | PyPI upload token                                |
+| `FPM_ALLOW_INSECURE_HOST`  | Comma-separated hosts to skip TLS for            |
+| `FPM_INSECURE`             | Disable ALL TLS verification (`1` to enable)     |
+| `FPM_SYSTEM_CERTS`         | Force platform certificate verifier (`1`)        |
+| `SSL_CERT_FILE`            | Custom CA bundle (overrides system certs)        |
+| `SSL_CERT_DIR`             | Directory of PEM certs (overrides system certs)  |
+| `SSL_CLIENT_CERT`          | mTLS client certificate file                     |
 | `NO_COLOR`                 | Disable colored output                           |
+
+## Network & TLS
+
+fpm bundles Mozilla's root CA certificates for reliable HTTPS in Docker
+containers and environments with missing system certificates.
+
+```toml
+# fpm.toml — network configuration
+[network]
+allow-insecure-host = ["internal-pypi.corp.example.com"]
+# system-certs = true    # force platform certificate store
+# client-cert = "/path/to/cert.pem"
+# client-key = "/path/to/key.pem"
+```
+
+**Certificate resolution precedence:**
+
+1. `SSL_CERT_FILE` / `SSL_CERT_DIR` — if set, these are the ONLY trusted roots
+2. System certificate pool — platform's native store
+3. Bundled Mozilla CAs — automatic fallback (Docker, air-gapped, etc.)
+
+**For VPN/corporate proxy environments:**
+
+```bash
+# Per-host TLS bypass (recommended)
+fpm install --allow-insecure-host pypi.org --allow-insecure-host files.pythonhosted.org requests
+
+# Or set once via environment variable
+export FPM_ALLOW_INSECURE_HOST=pypi.org,files.pythonhosted.org
+
+# Nuclear option: skip ALL TLS verification
+FPM_INSECURE=1 fpm install requests
+```
 
 ## Architecture
 
@@ -262,6 +306,7 @@ fpm/
 │   ├── platform/     # PEP 425 platform tags
 │   ├── resolver/     # PubGrub dependency resolver
 │   ├── client/       # PyPI HTTP client (PEP 691)
+│   ├── tls/          # TLS certificates + per-host bypass
 │   ├── cache/        # Content-addressable cache + GC
 │   ├── installer/    # Package installation + linking
 │   ├── env/          # Environment scanning + cross-manager

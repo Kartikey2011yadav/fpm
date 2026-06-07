@@ -12,9 +12,10 @@ import (
 )
 
 var auditCmd = &cobra.Command{
-	Use:   "audit",
-	Short: "Scan dependencies for known vulnerabilities",
-	Long:  "Query the OSV (Open Source Vulnerabilities) database for known security issues in installed packages.",
+	Use:     "audit",
+	Short:   "Scan dependencies for known vulnerabilities",
+	Long:    "Query the OSV (Open Source Vulnerabilities) database for known security issues in installed packages.",
+	GroupID: "package",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cwd, _ := os.Getwd()
 		activeVenv, err := venv.Detect(cwd)

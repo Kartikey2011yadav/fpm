@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/kartikeyyadav/fpm/internal/env"
+	"github.com/kartikeyyadav/fpm/internal/python"
 	"github.com/kartikeyyadav/fpm/internal/venv"
 	"github.com/kartikeyyadav/fpm/pkg/types"
 	"github.com/spf13/cobra"
@@ -22,21 +23,38 @@ func init() {
 
 func runPipList(cmd *cobra.Command, args []string) error {
 	cwd, _ := os.Getwd()
-	activeVenv, err := venv.Detect(cwd)
-	if err != nil {
-		return fmt.Errorf("no virtual environment found")
-	}
+	activeVenv, _ := venv.Detect(cwd)
 
 	showAll, _ := cmd.Flags().GetBool("all")
 	managerFilter, _ := cmd.Flags().GetString("manager")
 
-	// Gather all site-packages directories
+	// Gather site-packages directories (deduplicated)
+	seen := make(map[string]bool)
 	var dirs []string
-	if activeVenv.SitePackages != "" {
+
+	if activeVenv != nil && activeVenv.SitePackages != "" {
 		dirs = append(dirs, activeVenv.SitePackages)
+		seen[activeVenv.SitePackages] = true
 	}
-	if showAll && activeVenv.Interpreter != nil {
-		dirs = append(dirs, env.FindSitePackagesDirs(activeVenv.Interpreter.SysPaths)...)
+
+	// When --all or no venv found, scan system Python site-packages
+	if showAll || activeVenv == nil {
+		sysDirs := findSystemSitePackages()
+		for _, d := range sysDirs {
+			if !seen[d] {
+				dirs = append(dirs, d)
+				seen[d] = true
+			}
+		}
+	}
+
+	if activeVenv != nil && activeVenv.Interpreter != nil && showAll {
+		for _, d := range env.FindSitePackagesDirs(activeVenv.Interpreter.SysPaths) {
+			if !seen[d] {
+				dirs = append(dirs, d)
+				seen[d] = true
+			}
+		}
 	}
 
 	scanner := env.NewScanner(dirs)
@@ -67,37 +85,49 @@ func runPipList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Table output
-	fmt.Printf("%-30s %-12s %-8s %s\n", "Package", "Version", "Manager", "Location")
-	fmt.Printf("%-30s %-12s %-8s %s\n", strings.Repeat("─", 30), strings.Repeat("─", 12), strings.Repeat("─", 8), strings.Repeat("─", 20))
+	// Table output with colors
+	fmt.Printf("\033[1m\033[4m%-28s %-12s %-8s %s\033[0m\n", "Package", "Version", "Manager", "Location")
 
 	for _, pkg := range packages {
 		location := pkg.Location
-		if len(location) > 40 {
-			location = "..." + location[len(location)-37:]
+		if len(location) > 35 {
+			location = "..." + location[len(location)-32:]
 		}
-		fmt.Printf("%-30s %-12s %-8s %s\n",
+
+		// Color the manager name
+		mgrStr := pkg.Manager.String()
+		mgrColored := mgrStr
+		switch pkg.Manager {
+		case env.ManagerFpm:
+			mgrColored = "\033[32m" + mgrStr + "\033[0m"
+		case env.ManagerPip:
+			mgrColored = "\033[33m" + mgrStr + "\033[0m"
+		case env.ManagerUv:
+			mgrColored = "\033[35m" + mgrStr + "\033[0m"
+		case env.ManagerConda:
+			mgrColored = "\033[36m" + mgrStr + "\033[0m"
+		default:
+			mgrColored = "\033[2m" + mgrStr + "\033[0m"
+		}
+
+		fmt.Printf("\033[1m%-28s\033[0m \033[36m%-12s\033[0m %-8s \033[2m%s\033[0m\n",
 			pkg.Name.Raw(),
 			pkg.Version.String(),
-			pkg.Manager.String(),
+			mgrColored,
 			location,
 		)
 	}
 
-	fmt.Printf("\n%d packages total", len(packages))
-	if managerFilter == "" {
-		// Count by manager
-		counts := make(map[string]int)
-		for _, p := range packages {
-			counts[p.Manager.String()]++
-		}
-		parts := []string{}
-		for mgr, count := range counts {
-			parts = append(parts, fmt.Sprintf("%d %s", count, mgr))
-		}
-		fmt.Printf(" (%s)", strings.Join(parts, ", "))
+	// Summary with counts
+	counts := make(map[string]int)
+	for _, p := range packages {
+		counts[p.Manager.String()]++
 	}
-	fmt.Println()
+	parts := []string{}
+	for mgr, count := range counts {
+		parts = append(parts, fmt.Sprintf("%d %s", count, mgr))
+	}
+	fmt.Printf("\n\033[1m%d packages\033[0m (%s)\n", len(packages), strings.Join(parts, ", "))
 
 	return nil
 }
@@ -165,5 +195,15 @@ func printPackagesJSON(packages []env.InstalledPackage) {
 			pkg.Name.Raw(), pkg.Version.String(), pkg.Manager.String(), pkg.Location, comma)
 	}
 	fmt.Println("]")
+}
+
+func findSystemSitePackages() []string {
+	// Find Python and get its site-packages
+	finder := python.NewFinder()
+	interp, err := finder.FindBest("")
+	if err != nil {
+		return nil
+	}
+	return env.FindSitePackagesDirs(interp.SysPaths)
 }
 

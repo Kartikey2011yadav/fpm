@@ -49,6 +49,12 @@ default = true
 [[index]]
 name = "private"
 url = "https://pypi.company.com/simple"
+
+[network]
+allow-insecure-host = ["internal-pypi.corp.example.com"]
+# system-certs = true       # force platform certificate verifier
+# client-cert = "/path/to/cert.pem"
+# client-key = "/path/to/key.pem"
 ```
 
 ## Configuration Hierarchy
@@ -64,18 +70,24 @@ Priority (highest wins):
 
 ## Environment Variables
 
-| Variable                   | Description            | Default                   |
-| -------------------------- | ---------------------- | ------------------------- |
-| `FPM_CACHE_DIR`            | Cache directory        | `~/.cache/fpm`            |
-| `FPM_DATA_DIR`             | Data directory         | `~/.local/share/fpm`      |
-| `FPM_CONFIG_DIR`           | Config directory       | `~/.config/fpm`           |
-| `FPM_INDEX_URL`            | Override default index | `https://pypi.org/simple` |
-| `FPM_INDEX_TOKEN`          | Auth token for indexes | —                         |
-| `FPM_INDEX_USERNAME`       | Auth username          | —                         |
-| `FPM_INDEX_PASSWORD`       | Auth password          | —                         |
-| `FPM_CROSS_MANAGER_POLICY` | Cross-manager behavior | `ask`                     |
-| `FPM_PUBLISH_TOKEN`        | PyPI upload token      | —                         |
-| `NO_COLOR`                 | Disable colored output | —                         |
+| Variable                   | Description                         | Default                   |
+| -------------------------- | ----------------------------------- | ------------------------- |
+| `FPM_CACHE_DIR`            | Cache directory                     | `~/.cache/fpm`            |
+| `FPM_DATA_DIR`             | Data directory                      | `~/.local/share/fpm`      |
+| `FPM_CONFIG_DIR`           | Config directory                    | `~/.config/fpm`           |
+| `FPM_INDEX_URL`            | Override default index              | `https://pypi.org/simple` |
+| `FPM_INDEX_TOKEN`          | Auth token for indexes              | —                         |
+| `FPM_INDEX_USERNAME`       | Auth username                       | —                         |
+| `FPM_INDEX_PASSWORD`       | Auth password                       | —                         |
+| `FPM_CROSS_MANAGER_POLICY` | Cross-manager behavior              | `ask`                     |
+| `FPM_PUBLISH_TOKEN`        | PyPI upload token                   | —                         |
+| `FPM_ALLOW_INSECURE_HOST`  | Skip TLS for these hosts (csv)      | —                         |
+| `FPM_INSECURE`             | Disable ALL TLS verification (`1`)  | —                         |
+| `FPM_SYSTEM_CERTS`         | Force platform certificate store    | —                         |
+| `SSL_CERT_FILE`            | Custom CA bundle (overrides system) | —                         |
+| `SSL_CERT_DIR`             | Directory of CA certs               | —                         |
+| `SSL_CLIENT_CERT`          | mTLS client certificate             | —                         |
+| `NO_COLOR`                 | Disable colored output              | —                         |
 
 ## Platform Directories
 

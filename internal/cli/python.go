@@ -7,6 +7,9 @@ import (
 var pythonCmd = &cobra.Command{
 	Use:   "python",
 	Short: "Manage Python versions",
+	Long: `Install, switch, and manage Python versions.
+Downloads from python-build-standalone for fast, reliable installs.`,
+	GroupID: "environment",
 }
 
 var pythonListCmd = &cobra.Command{
@@ -15,9 +18,10 @@ var pythonListCmd = &cobra.Command{
 }
 
 var pythonInstallCmd = &cobra.Command{
-	Use:   "install [versions...]",
-	Short: "Install Python versions",
-	Args:  cobra.MinimumNArgs(1),
+	Use:     "install [versions...]",
+	Short:   "Install Python versions",
+	Example: `  fpm python install 3.12`,
+	Args:    cobra.MinimumNArgs(1),
 }
 
 var pythonUseCmd = &cobra.Command{

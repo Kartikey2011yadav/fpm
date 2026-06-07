@@ -4,32 +4,39 @@
 
 All commands support these flags:
 
-| Flag             | Short | Description                                  |
-| ---------------- | ----- | -------------------------------------------- |
-| `--global`       |       | Apply to system environment instead of local |
-| `--verbose`      | `-v`  | Enable verbose output                        |
-| `--quiet`        | `-q`  | Suppress output except errors                |
-| `--json`         |       | Output in JSON format                        |
-| `--no-progress`  |       | Disable progress bars                        |
-| `--color <mode>` |       | Color output: auto, always, never            |
+| Flag                           | Short | Description                                  |
+| ------------------------------ | ----- | -------------------------------------------- |
+| `--version`                    | `-V`  | Print version and exit                       |
+| `--global`                     |       | Apply to system environment instead of local |
+| `--verbose`                    | `-v`  | Enable verbose output                        |
+| `--quiet`                      | `-q`  | Suppress output except errors                |
+| `--json`                       |       | Output in JSON format                        |
+| `--no-progress`                |       | Disable progress bars                        |
+| `--color <mode>`               |       | Color output: auto, always, never            |
+| `--allow-insecure-host <host>` |       | Skip TLS verification for specific hosts     |
 
-## Project Commands
-
-### `fpm init [path]`
-
-Create a new Python project with pyproject.toml, .python-version, and .venv.
+## Package Commands
 
 ### `fpm install <packages...>`
 
-Install packages. Alias: `fpm add`.
+Install packages. Aliases: `fpm add`.
 
-- `-r <file>` — install from requirements.txt
-- `-e <path>` — editable install
-- `--group <name>` — install dependency group
+- `--global` — install system-wide instead of into local venv
+- Without a venv, installs globally (like pip without a venv)
 
 ### `fpm remove <packages...>`
 
-Remove packages from environment and pyproject.toml.
+Remove packages from environment and pyproject.toml. Aliases: `fpm uninstall`,
+`fpm rm`.
+
+### `fpm list`
+
+List installed packages with manager attribution. Alias: `fpm ls`.
+
+- `--all` — include system packages
+- `--manager <name>` — filter by manager (fpm, pip, uv, conda, poetry, pdm,
+  system)
+- `--json` — output as JSON array
 
 ### `fpm sync`
 
@@ -39,10 +46,6 @@ Sync environment to match lockfile exactly.
 
 Generate or update fpm.lock from pyproject.toml.
 
-### `fpm run <command> [args...]`
-
-Run command in the managed environment. Supports PEP 723 scripts.
-
 ### `fpm tree`
 
 Display dependency tree.
@@ -50,7 +53,44 @@ Display dependency tree.
 - `--depth <n>` — limit depth
 - `--invert` — show reverse dependencies
 
-## Python Commands
+### `fpm audit`
+
+Scan installed packages for known vulnerabilities (OSV database).
+
+## Project Commands
+
+### `fpm init [path]`
+
+Create a new Python project with pyproject.toml, .python-version, and .venv.
+
+### `fpm run <command> [args...]`
+
+Run command in the managed environment. Supports PEP 723 scripts.
+
+### `fpm build [path]`
+
+Build wheel and/or source distribution.
+
+- `--wheel` — only wheel
+- `--sdist` — only source distribution
+- `-o <dir>` — output directory (default: dist/)
+
+### `fpm publish [files...]`
+
+Upload distributions to PyPI.
+
+- `--repository <name>` — target (pypi, testpypi, or URL)
+- `--token <token>` — authentication token
+
+## Environment Commands
+
+### `fpm venv [path]`
+
+Create a virtual environment.
+
+- `--python <version>` — use specific Python (downloads if needed)
+- `--system-packages` — allow system site-packages
+- `--prompt <string>` — custom activation prompt
 
 ### `fpm python list`
 
@@ -72,16 +112,6 @@ Pin Python version for current project (.python-version).
 
 Remove managed Python installations.
 
-## Environment Commands
-
-### `fpm venv [path]`
-
-Create a virtual environment.
-
-- `--python <version>` — use specific Python (downloads if needed)
-- `--system-packages` — allow system site-packages
-- `--prompt <string>` — custom activation prompt
-
 ### `fpm snapshot create [message]`
 
 Capture current environment state. Alias: `fpm snapshot save`.
@@ -102,7 +132,7 @@ Compare two snapshots or snapshot vs current.
 
 Remove a snapshot.
 
-## Tool Commands
+## Advanced Commands
 
 ### `fpm tool install <package>`
 
@@ -119,8 +149,6 @@ List installed tools.
 ### `fpm tool uninstall <tool>`
 
 Remove an installed tool.
-
-## Cache Commands
 
 ### `fpm cache size`
 
@@ -144,32 +172,9 @@ Remove corrupted cache entries.
 
 Remove all cached data.
 
-## Build & Publish
-
-### `fpm build [path]`
-
-Build wheel and/or source distribution.
-
-- `--wheel` — only wheel
-- `--sdist` — only source distribution
-- `-o <dir>` — output directory (default: dist/)
-
-### `fpm publish [files...]`
-
-Upload distributions to PyPI.
-
-- `--repository <name>` — target (pypi, testpypi, or URL)
-- `--token <token>` — authentication token
-
-## Other Commands
-
-### `fpm audit`
-
-Scan installed packages for known vulnerabilities (OSV database).
-
 ### `fpm pip list`
 
-List packages with manager attribution.
+List packages with manager attribution (same as `fpm list`).
 
 - `--all` — include system packages
 - `--manager <name>` — filter by manager
@@ -188,4 +193,4 @@ Update fpm to the latest version.
 
 ### `fpm version`
 
-Show fpm version.
+Show fpm version. Also available as `fpm --version` or `fpm -V`.

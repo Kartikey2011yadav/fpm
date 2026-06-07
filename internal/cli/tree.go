@@ -7,7 +7,18 @@ import (
 var treeCmd = &cobra.Command{
 	Use:   "tree",
 	Short: "Display the dependency tree",
-	RunE: nil, // implemented in tree_impl.go
+	Long: `Show the full dependency tree for the current environment.
+Visualizes which packages depend on which, with version information.`,
+	Example: `  # Show full dependency tree
+  fpm tree
+
+  # Limit depth
+  fpm tree --depth 2
+
+  # Show what depends on a package (reverse deps)
+  fpm tree --invert`,
+	GroupID: "package",
+	RunE:    nil, // implemented in tree_impl.go
 }
 
 func init() {

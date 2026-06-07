@@ -2,16 +2,20 @@ package client
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/kartikeyyadav/fpm/internal/config"
+	fpmtls "github.com/kartikeyyadav/fpm/internal/tls"
 	"github.com/kartikeyyadav/fpm/pkg/types"
 )
 
@@ -22,6 +26,7 @@ type RegistryClient struct {
 	concurrency int
 	semaphore   chan struct{}
 	mu          sync.Mutex
+	transport   *http.Transport
 }
 
 type ClientOptions struct {
@@ -29,6 +34,7 @@ type ClientOptions struct {
 	CacheDir    string
 	Concurrency int
 	Timeout     time.Duration
+	Network     config.NetworkConfig
 }
 
 func New(opts ClientOptions) *RegistryClient {
@@ -47,14 +53,34 @@ func New(opts ClientOptions) *RegistryClient {
 		}
 	}
 
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+
+	// TLS configuration (precedence: SSL_CERT_FILE/DIR > system > bundled fallback)
+	if os.Getenv("FPM_INSECURE") == "1" || os.Getenv("FPM_INSECURE") == "true" {
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	} else {
+		pool, _ := fpmtls.LoadCertPool()
+		if pool != nil {
+			transport.TLSClientConfig = &tls.Config{RootCAs: pool}
+		}
+	}
+
+	// Per-host insecure bypass
+	var rt http.RoundTripper = transport
+	if len(opts.Network.AllowInsecureHost) > 0 {
+		rt = fpmtls.NewInsecureHostTransport(transport, opts.Network.AllowInsecureHost)
+	}
+
 	return &RegistryClient{
 		httpClient: &http.Client{
-			Timeout: opts.Timeout,
+			Timeout:   opts.Timeout,
+			Transport: rt,
 		},
 		indexes:     opts.Indexes,
 		cacheDir:    opts.CacheDir,
 		concurrency: opts.Concurrency,
 		semaphore:   make(chan struct{}, opts.Concurrency),
+		transport:   transport,
 	}
 }
 
@@ -109,9 +135,11 @@ func (c *RegistryClient) FetchPackageVersions(ctx context.Context, name types.Pa
 	}
 
 	// Fetch from registries
+	var lastErr error
 	for _, index := range c.indexes {
 		detail, err := c.fetchFromIndex(ctx, index, name)
 		if err != nil {
+			lastErr = err
 			continue
 		}
 		// Cache the result
@@ -119,6 +147,9 @@ func (c *RegistryClient) FetchPackageVersions(ctx context.Context, name types.Pa
 		return detail, nil
 	}
 
+	if lastErr != nil {
+		return nil, fmt.Errorf("failed to resolve %s: %w", name.Raw(), lastErr)
+	}
 	return nil, fmt.Errorf("package %q not found in any index", name.Raw())
 }
 
@@ -149,12 +180,24 @@ func (c *RegistryClient) fetchFromIndex(ctx context.Context, index config.IndexC
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("reading response from %s: %w", url, err)
 	}
 
+	// Check content type — PyPI may return HTML instead of JSON
+	contentType := resp.Header.Get("Content-Type")
+
 	var detail SimpleProjectDetail
-	if err := json.Unmarshal(body, &detail); err != nil {
-		return nil, fmt.Errorf("failed to parse JSON response: %w", err)
+	if strings.Contains(contentType, "json") {
+		if err := json.Unmarshal(body, &detail); err != nil {
+			return nil, fmt.Errorf("parsing JSON from %s: %w", url, err)
+		}
+	} else {
+		// Parse HTML Simple API response (PEP 503 fallback)
+		files, err := parseSimpleHTML(string(body), url)
+		if err != nil {
+			return nil, fmt.Errorf("parsing HTML from %s: %w", url, err)
+		}
+		detail.Files = files
 	}
 
 	return &detail, nil
@@ -228,4 +271,74 @@ func (c *RegistryClient) writeCache(name types.PackageName, detail *SimpleProjec
 		return
 	}
 	os.WriteFile(path, data, 0644)
+}
+
+// parseSimpleHTML parses PEP 503 HTML Simple API response.
+// Extracts <a> tags with href pointing to wheel/sdist files.
+var linkRegex = regexp.MustCompile(`<a\s+[^>]*href="([^"]+)"[^>]*>([^<]+)</a>`)
+var hashRegex = regexp.MustCompile(`#sha256=([a-f0-9]+)`)
+var requiresPythonRegex = regexp.MustCompile(`data-requires-python="([^"]*)"`)
+
+func parseSimpleHTML(html, baseURL string) ([]SimpleFile, error) {
+	matches := linkRegex.FindAllStringSubmatch(html, -1)
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("no links found in HTML response")
+	}
+
+	var files []SimpleFile
+	for _, match := range matches {
+		href := match[1]
+		filename := match[2]
+
+		// Skip non-wheel non-tar files
+		if !strings.HasSuffix(filename, ".whl") && !strings.HasSuffix(filename, ".tar.gz") {
+			continue
+		}
+
+		// Resolve relative URLs
+		fileURL := href
+		if strings.HasPrefix(href, "/") {
+			// Absolute path — prepend scheme+host from base
+			parts := strings.SplitN(baseURL, "/", 4)
+			if len(parts) >= 3 {
+				fileURL = parts[0] + "//" + parts[2] + href
+			}
+		} else if !strings.HasPrefix(href, "http") {
+			fileURL = strings.TrimSuffix(baseURL, "/") + "/" + href
+		}
+
+		// Extract hash from URL fragment
+		hashes := make(map[string]string)
+		if hashMatch := hashRegex.FindStringSubmatch(href); len(hashMatch) == 2 {
+			hashes["sha256"] = hashMatch[1]
+			// Remove fragment from URL
+			if idx := strings.Index(fileURL, "#"); idx > 0 {
+				fileURL = fileURL[:idx]
+			}
+		}
+
+		// Extract requires-python from the surrounding context
+		requiresPython := ""
+		lineStart := strings.LastIndex(html[:strings.Index(html, href)], "<a")
+		if lineStart >= 0 {
+			lineEnd := strings.Index(html[lineStart:], "</a>") + lineStart
+			if lineEnd > lineStart {
+				segment := html[lineStart:lineEnd]
+				if rpMatch := requiresPythonRegex.FindStringSubmatch(segment); len(rpMatch) == 2 {
+					requiresPython = strings.ReplaceAll(rpMatch[1], "&gt;", ">")
+					requiresPython = strings.ReplaceAll(requiresPython, "&lt;", "<")
+					requiresPython = strings.ReplaceAll(requiresPython, "&amp;", "&")
+				}
+			}
+		}
+
+		files = append(files, SimpleFile{
+			Filename:       filename,
+			URL:            fileURL,
+			Hashes:         hashes,
+			RequiresPython: requiresPython,
+		})
+	}
+
+	return files, nil
 }

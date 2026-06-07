@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/kartikeyyadav/fpm/internal/cache"
 	"github.com/kartikeyyadav/fpm/internal/client"
@@ -13,6 +14,7 @@ import (
 	"github.com/kartikeyyadav/fpm/internal/fs"
 	"github.com/kartikeyyadav/fpm/internal/lock"
 	"github.com/kartikeyyadav/fpm/internal/pep508"
+	"github.com/kartikeyyadav/fpm/internal/python"
 	"github.com/kartikeyyadav/fpm/internal/resolver"
 	"github.com/kartikeyyadav/fpm/internal/venv"
 	"github.com/kartikeyyadav/fpm/internal/workspace"
@@ -43,35 +45,76 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no packages specified")
 	}
 
-	// Find the active virtual environment
+	// Determine target: venv (local) or system (global)
 	cwd, _ := os.Getwd()
-	activeVenv, err := venv.Detect(cwd)
-	if err != nil {
-		return fmt.Errorf("no virtual environment found. Run 'fpm init' or 'fpm venv' first")
+	activeVenv, _ := venv.Detect(cwd)
+
+	var targetSitePackages string
+	var targetBinDir string
+	var envPath string
+
+	if activeVenv != nil && !flagGlobal {
+		// Install into local venv
+		targetSitePackages = activeVenv.SitePackages
+		targetBinDir = activeVenv.BinDir
+		envPath = activeVenv.Path
+	} else {
+		// Install globally (system site-packages) — like pip without a venv
+		finder := python.NewFinder()
+		interp, findErr := finder.FindBest("")
+		if findErr != nil {
+			return fmt.Errorf("no Python found. Install Python or create a venv with 'fpm init'")
+		}
+		targetSitePackages = interp.SitePackages
+		if targetSitePackages == "" && len(interp.SysPaths) > 0 {
+			// Use first writable site-packages from sys.path
+			for _, p := range interp.SysPaths {
+				if strings.Contains(p, "site-packages") || strings.Contains(p, "dist-packages") {
+					targetSitePackages = p
+					break
+				}
+			}
+		}
+		targetBinDir = interp.BinDir()
+		envPath = "global:" + interp.Path
+		if flagGlobal && activeVenv != nil {
+			fmt.Printf("  \033[33m●\033[0m Installing globally (--global flag)\n")
+			fmt.Printf("    \033[2mTarget: %s\033[0m\n\n", targetSitePackages)
+		} else if activeVenv == nil {
+			fmt.Printf("  \033[33m●\033[0m No virtual environment detected — installing to system Python\n")
+			fmt.Printf("    \033[2mTarget: %s\033[0m\n", targetSitePackages)
+			fmt.Printf("    \033[2mTip: Run 'fpm init' to create a project with isolated environment\033[0m\n\n")
+		}
+	}
+
+	if targetSitePackages == "" {
+		return fmt.Errorf("cannot determine site-packages directory. Run 'fpm init' to create a project")
 	}
 
 	// Ensure site-packages directory exists
-	if activeVenv.SitePackages != "" {
-		os.MkdirAll(activeVenv.SitePackages, 0755)
-	}
+	os.MkdirAll(targetSitePackages, 0755)
 
 	// Scan existing installations
-	var scanResult *env.ScanResult
-	if activeVenv.SitePackages != "" {
-		scanner := env.NewScanner([]string{activeVenv.SitePackages})
-		scanResult, _ = scanner.Scan()
-	}
+	scanner := env.NewScanner([]string{targetSitePackages})
+	scanResult, _ := scanner.Scan()
 	if scanResult == nil {
 		scanResult = &env.ScanResult{}
 	}
 
-	fmt.Printf("Resolving %d package(s)...\n", len(requirements))
+	_ = targetBinDir
+
+	fmt.Printf("\033[1m⠋ Resolving %d package(s)...\033[0m\n\n", len(requirements))
 
 	// Resolve dependencies
+	networkCfg := cfg.Network
+	if len(flagAllowInsecureHost) > 0 {
+		networkCfg.AllowInsecureHost = append(networkCfg.AllowInsecureHost, flagAllowInsecureHost...)
+	}
 	pypiClient := client.New(client.ClientOptions{
 		Indexes:     cfg.Indexes,
 		CacheDir:    filepath.Join(cfg.Cache.Dir, "http"),
 		Concurrency: cfg.Tool.Concurrency,
+		Network:     networkCfg,
 	})
 
 	res, err := resolver.New(resolver.ResolverOptions{
@@ -106,14 +149,14 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		wheelPath := filepath.Join(pkgCache.WheelsDir(), wheelFilename)
 
 		if _, err := os.Stat(wheelPath); err != nil {
-			fmt.Printf("  Downloading %s %s...\n", pkg.Name.Raw(), pkg.Version.String())
+			fmt.Printf("  \033[34m↓\033[0m \033[1m%s\033[0m \033[2m%s\033[0m\n", pkg.Name.Raw(), pkg.Version.String())
 			dlFile := client.SimpleFile{URL: pkg.URL, Filename: wheelFilename}
 			if err := pypiClient.DownloadWheel(ctx, dlFile, wheelPath); err != nil {
-				fmt.Fprintf(os.Stderr, "  error downloading %s: %v\n", pkg.Name.Raw(), err)
+				fmt.Fprintf(os.Stderr, "  \033[31m✗\033[0m %s: %v\n", pkg.Name.Raw(), err)
 				continue
 			}
 		} else {
-			fmt.Printf("  Using cached %s %s\n", pkg.Name.Raw(), pkg.Version.String())
+			fmt.Printf("  \033[33m●\033[0m \033[1m%s\033[0m \033[2m%s (cached)\033[0m\n", pkg.Name.Raw(), pkg.Version.String())
 		}
 
 		// Store in CAS
@@ -125,15 +168,31 @@ func runInstall(cmd *cobra.Command, args []string) error {
 
 		// Link to site-packages
 		casPath, _ := pkgCache.Retrieve(casKey)
-		if err := fs.LinkDir(casPath, activeVenv.SitePackages, fs.LinkModeAuto); err != nil {
+		if err := fs.LinkDir(casPath, targetSitePackages, fs.LinkModeAuto); err != nil {
 			fmt.Fprintf(os.Stderr, "  error installing %s: %v\n", pkg.Name.Raw(), err)
 			continue
 		}
 
+		// Write INSTALLER marker so fpm is recognized as the manager
+		entries, _ := os.ReadDir(targetSitePackages)
+		pkgNorm := strings.ReplaceAll(pkg.Name.Normalized(), "-", "_")
+		for _, entry := range entries {
+			name := entry.Name()
+			if !strings.HasSuffix(name, ".dist-info") {
+				continue
+			}
+			entryNorm := strings.ToLower(strings.ReplaceAll(name, "-", "_"))
+			if strings.HasPrefix(entryNorm, pkgNorm+"_") || strings.HasPrefix(entryNorm, pkgNorm+"-") {
+				installerPath := filepath.Join(targetSitePackages, name, "INSTALLER")
+				os.WriteFile(installerPath, []byte("fpm\n"), 0644)
+				break
+			}
+		}
+
 		// Track reference
-		refTracker.AddReference(activeVenv.Path, casKey, pkg.Name.Normalized(), pkg.Version.String())
+		refTracker.AddReference(envPath, casKey, pkg.Name.Normalized(), pkg.Version.String())
 		installed++
-		fmt.Printf("  Installed %s %s\n", pkg.Name.Raw(), pkg.Version.String())
+		fmt.Printf("  \033[32m✓\033[0m \033[1m%s\033[0m \033[36m%s\033[0m\n", pkg.Name.Raw(), pkg.Version.String())
 	}
 
 	// Update pyproject.toml if it exists
@@ -149,6 +208,6 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	lf := lock.Generate(res, "")
 	lf.Write(filepath.Join(cwd, lock.LockFileName))
 
-	fmt.Printf("\nDone: %d package(s) installed.\n", installed)
+	fmt.Printf("\n\033[32m🚀 Done: %d package(s) installed.\033[0m\n", installed)
 	return nil
 }

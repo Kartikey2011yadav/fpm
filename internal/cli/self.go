@@ -5,8 +5,9 @@ import (
 )
 
 var selfCmd = &cobra.Command{
-	Use:   "self",
-	Short: "Manage the fpm binary",
+	Use:     "self",
+	Short:   "Manage the fpm binary",
+	GroupID: "advanced",
 }
 
 var selfUpdateCmd = &cobra.Command{
