@@ -1,6 +1,7 @@
 package python
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"runtime"
@@ -9,15 +10,49 @@ import (
 )
 
 type Interpreter struct {
-	Path         string
-	Version      pep440.Version
-	Prefix       string
-	SitePackages string
-	SysPaths     []string
-	Scheme       InstallScheme
-	IsVenv       bool
-	IsManaged    bool
-	Impl         Implementation
+	Path         string        `json:"path"`
+	Version      pep440.Version `json:"-"`
+	VersionStr   string        `json:"version"`
+	Prefix       string        `json:"prefix"`
+	SitePackages string        `json:"site_packages"`
+	SysPaths     []string      `json:"sys_paths"`
+	Scheme       InstallScheme `json:"scheme"`
+	IsVenv       bool          `json:"is_venv"`
+	IsManaged    bool          `json:"is_managed"`
+	Impl         Implementation `json:"impl"`
+}
+
+func (i *Interpreter) MarshalJSON() ([]byte, error) {
+	type Alias Interpreter
+	return json.Marshal(&struct {
+		*Alias
+		VersionStr string `json:"version"`
+	}{
+		Alias:      (*Alias)(i),
+		VersionStr: i.Version.String(),
+	})
+}
+
+func (i *Interpreter) UnmarshalJSON(data []byte) error {
+	type Alias Interpreter
+	aux := &struct {
+		*Alias
+		VersionStr string `json:"version"`
+	}{
+		Alias: (*Alias)(i),
+	}
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+	if aux.VersionStr != "" {
+		v, err := pep440.Parse(aux.VersionStr)
+		if err != nil {
+			return err
+		}
+		i.Version = v
+		i.VersionStr = aux.VersionStr
+	}
+	return nil
 }
 
 type Implementation int
@@ -42,12 +77,12 @@ func (i Implementation) String() string {
 }
 
 type InstallScheme struct {
-	PureLib  string
-	PlatLib  string
-	Scripts  string
-	Data     string
-	Include  string
-	Headers  string
+	PureLib  string `json:"purelib"`
+	PlatLib  string `json:"platlib"`
+	Scripts  string `json:"scripts"`
+	Data     string `json:"data"`
+	Include  string `json:"include"`
+	Headers  string `json:"headers"`
 }
 
 func (i *Interpreter) PythonTag() string {
