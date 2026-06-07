@@ -96,3 +96,29 @@ Priority (highest wins):
 | Linux    | `~/.cache/fpm`             | `~/.local/share/fpm`                | `~/.config/fpm`                     |
 | macOS    | `~/Library/Caches/fpm`     | `~/Library/Application Support/fpm` | `~/Library/Application Support/fpm` |
 | Windows  | `%LOCALAPPDATA%\fpm\cache` | `%LOCALAPPDATA%\fpm\data`           | `%APPDATA%\fpm`                     |
+
+### Subdirectories
+
+| Directory         | Location                                        | Purpose                                |
+| ----------------- | ----------------------------------------------- | -------------------------------------- |
+| Cache root        | `$FPM_CACHE_DIR`                                | All cached data                        |
+| CAS               | `<cache>/cas/sha256/`                           | Extracted packages (content-addressed) |
+| Wheels            | `<cache>/wheels/`                               | Downloaded .whl files                  |
+| HTTP cache        | `<cache>/http/`                                 | PyPI metadata responses                |
+| Refs              | `<cache>/refs/`                                 | Reference tracking (env↔package)       |
+| Python installs   | `$FPM_PYTHON_INSTALL_DIR` or `<data>/python/`   | Managed Python versions                |
+| Tool environments | `$FPM_TOOL_DIR` or `<data>/tools/`              | Isolated tool venvs                    |
+| Tool binaries     | `$FPM_TOOL_BIN_DIR` or `~/.local/bin/`          | Tool executables (in PATH)             |
+| Credentials       | `$FPM_CREDENTIALS_DIR` or `<data>/credentials/` | Stored auth credentials                |
+
+### Directory Override Environment Variables
+
+| Variable                 | Default              | Purpose                      |
+| ------------------------ | -------------------- | ---------------------------- |
+| `FPM_CACHE_DIR`          | `~/.cache/fpm`       | Cache root                   |
+| `FPM_DATA_DIR`           | `~/.local/share/fpm` | Data root                    |
+| `FPM_CONFIG_DIR`         | `~/.config/fpm`      | Config root                  |
+| `FPM_PYTHON_INSTALL_DIR` | `<data>/python`      | Managed Python installations |
+| `FPM_TOOL_DIR`           | `<data>/tools`       | Tool venv storage            |
+| `FPM_TOOL_BIN_DIR`       | `~/.local/bin`       | Tool executables             |
+| `FPM_CREDENTIALS_DIR`    | `<data>/credentials` | Stored credentials           |
