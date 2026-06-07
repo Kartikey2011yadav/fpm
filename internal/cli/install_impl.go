@@ -54,11 +54,18 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	var targetBinDir string
 	var envPath string
 
-	if activeVenv != nil && !flagGlobal {
+	if activeVenv != nil && !flagSystem {
 		// Install into local venv
 		targetSitePackages = activeVenv.SitePackages
 		targetBinDir = activeVenv.BinDir
 		envPath = activeVenv.Path
+	} else if activeVenv == nil && !flagSystem {
+		// No venv and no --system flag: error (like uv)
+		return &fpmErrors.FpmError{
+			Message:  "No virtual environment found",
+			ExitCode: fpmErrors.ExitFailure,
+			Hint:     "Run `fpm venv` to create an environment, or pass `--system` (`-s`) to\ninstall into the system Python.",
+		}
 	} else {
 		// Install globally (system site-packages) — like pip without a venv
 		finder := python.NewFinder()
@@ -78,8 +85,8 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		}
 		targetBinDir = interp.BinDir()
 		envPath = "global:" + interp.Path
-		if flagGlobal && activeVenv != nil {
-			fmt.Printf("  \033[33m●\033[0m Installing globally (--global flag)\n")
+		if flagSystem && activeVenv != nil {
+			fmt.Printf("  \033[33m●\033[0m Installing to system Python (--system flag)\n")
 			fmt.Printf("    \033[2mTarget: %s\033[0m\n\n", targetSitePackages)
 		}
 	}
@@ -193,7 +200,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	}
 
 	// Update pyproject.toml and lockfile only when in a project (not global installs)
-	if activeVenv != nil && !flagGlobal {
+	if activeVenv != nil && !flagSystem {
 		pyproject, err := workspace.ReadPyProjectToml(cwd)
 		if err == nil {
 			for _, arg := range args {

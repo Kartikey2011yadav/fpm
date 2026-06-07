@@ -27,7 +27,7 @@ var pythonInstallCmd = &cobra.Command{
 var pythonUseCmd = &cobra.Command{
 	Use:   "use <version>",
 	Short: "Switch active Python version",
-	Long:  "Switch the active Python version for the current project (local) or system-wide (--global).",
+	Long:  "Switch the active Python version for the current project (local) or system-wide (--system).",
 	Args:  cobra.ExactArgs(1),
 }
 

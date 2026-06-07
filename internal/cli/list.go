@@ -10,7 +10,8 @@ var listCmd = &cobra.Command{
 	Short:   "List installed packages",
 	Long: `List packages managed by fpm in the current environment.
 Use --all (-a) to show packages from all managers (pip, uv, conda, etc.).
-Use --manager to filter by a specific manager.`,
+Use --manager to filter by a specific manager.
+Use --system to list from system Python instead of the active venv.`,
 	Example: `  # List fpm-managed packages
   fpm list
 

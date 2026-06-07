@@ -22,7 +22,7 @@ Snapshots are scoped per-environment: each venv/project has its own
 independent snapshot history. This means:
   - Project A's snapshots are separate from Project B's
   - Each venv tracks its own timeline
-  - Global environment has its own snapshot history (use --global)
+  - Global environment has its own snapshot history (use --system)
 
 Think of it as git for your Python environment.`,
 	GroupID: "environment",

@@ -10,7 +10,7 @@ var (
 	flagColor             string
 	flagNoProgress        bool
 	flagJSON              bool
-	flagGlobal            bool
+	flagSystem            bool
 	flagAllowInsecureHost []string
 )
 
@@ -35,7 +35,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&flagColor, "color", "auto", "Control color output (auto, always, never)")
 	rootCmd.PersistentFlags().BoolVar(&flagNoProgress, "no-progress", false, "Disable progress bars")
 	rootCmd.PersistentFlags().BoolVar(&flagJSON, "json", false, "Output in JSON format")
-	rootCmd.PersistentFlags().BoolVar(&flagGlobal, "global", false, "Apply to global/system environment instead of local")
+	rootCmd.PersistentFlags().BoolVarP(&flagSystem, "system", "s", false, "Install into system Python instead of virtual environment")
 	rootCmd.PersistentFlags().StringSliceVar(&flagAllowInsecureHost, "allow-insecure-host", nil, "Skip TLS verification for specific hosts")
 
 	rootCmd.AddGroup(

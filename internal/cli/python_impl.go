@@ -78,7 +78,7 @@ func runPythonInstall(cmd *cobra.Command, args []string) error {
 
 func runPythonUse(cmd *cobra.Command, args []string) error {
 	version := args[0]
-	global := flagGlobal
+	global := flagSystem
 
 	if err := python.UseVersion(version, global); err != nil {
 		return err
