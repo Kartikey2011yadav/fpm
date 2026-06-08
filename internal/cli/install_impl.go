@@ -11,10 +11,11 @@ import (
 	"github.com/kartikeyyadav/fpm/internal/cache"
 	"github.com/kartikeyyadav/fpm/internal/client"
 	"github.com/kartikeyyadav/fpm/internal/config"
-	fpmlog "github.com/kartikeyyadav/fpm/internal/log"
+	"github.com/kartikeyyadav/fpm/internal/depgraph"
 	"github.com/kartikeyyadav/fpm/internal/env"
 	"github.com/kartikeyyadav/fpm/internal/fs"
 	"github.com/kartikeyyadav/fpm/internal/lock"
+	fpmlog "github.com/kartikeyyadav/fpm/internal/log"
 	"github.com/kartikeyyadav/fpm/internal/pep508"
 	"github.com/kartikeyyadav/fpm/internal/python"
 	"github.com/kartikeyyadav/fpm/internal/resolver"
@@ -244,6 +245,25 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	}
 
 	totalTime := time.Since(startTime)
+
+	// Update dependency graph — track requested vs transitive
+	graph := depgraph.Load(envPath)
+	requestedNames := make(map[string]bool)
+	for _, req := range requirements {
+		requestedNames[req.Name.Normalized()] = true
+	}
+	for _, pkg := range res.Packages {
+		var deps []string
+		for _, d := range pkg.Deps {
+			deps = append(deps, d.Name.Normalized())
+		}
+		if requestedNames[pkg.Name.Normalized()] {
+			graph.AddRequested(pkg.Name.Normalized(), pkg.Version.String(), deps)
+		} else {
+			graph.AddTransitive(pkg.Name.Normalized(), pkg.Version.String(), deps)
+		}
+	}
+	graph.Save(envPath)
 
 	// Update pyproject.toml and lockfile only when in a project (not global installs)
 	if activeVenv != nil && !flagSystem {

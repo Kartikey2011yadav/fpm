@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/kartikeyyadav/fpm/internal/depgraph"
 	"github.com/kartikeyyadav/fpm/internal/env"
 	"github.com/kartikeyyadav/fpm/internal/python"
 	"github.com/kartikeyyadav/fpm/internal/venv"
@@ -47,7 +48,19 @@ func runAutoremove(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no virtual environment found. Use --system to check system packages")
 	}
 
-	orphans := findOrphanDeps(targetSitePackages, nil)
+	// Use graph first, fall back to METADATA scan
+	envPath := "global"
+	if activeVenv != nil && !flagSystem {
+		envPath = activeVenv.Path
+	}
+	graph := depgraph.Load(envPath)
+	orphans := graph.Orphans()
+
+	// Fallback: if graph is empty (fpm just installed), use METADATA scan
+	if len(orphans) == 0 {
+		orphans = findOrphanDeps(targetSitePackages, nil)
+	}
+
 	if len(orphans) == 0 {
 		fmt.Println("  No orphaned packages found.")
 		return nil
@@ -66,10 +79,12 @@ func runAutoremove(cmd *cobra.Command, args []string) error {
 			fmt.Printf("  \033[31m✗\033[0m %s: %v\n", name, err)
 			continue
 		}
+		graph.Remove(types.NewPackageName(name).Normalized())
 		fmt.Printf("  \033[32m✓\033[0m Removed %s\n", name)
 		removed++
 	}
 
+	graph.Save(envPath)
 	fmt.Printf("\n  %d package(s) removed.\n", removed)
 	return nil
 }
@@ -138,9 +153,23 @@ func runRemove(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Purge unused dependencies
+	// Update dependency graph
+	envPath := "global"
+	if activeVenv != nil && !flagSystem {
+		envPath = activeVenv.Path
+	}
+	graph := depgraph.Load(envPath)
+	for _, name := range args {
+		graph.Remove(types.NewPackageName(name).Normalized())
+	}
+
+	// Purge unused dependencies using the graph
 	if purge && removed > 0 && targetSitePackages != "" {
-		orphans := findOrphanDeps(targetSitePackages, args)
+		orphans := graph.Orphans()
+		// Fallback to METADATA scan if graph is empty (pre-existing packages)
+		if len(orphans) == 0 {
+			orphans = findOrphanDeps(targetSitePackages, args)
+		}
 		if len(orphans) > 0 {
 			fmt.Printf("\n  Removing %d unused dependencies:\n", len(orphans))
 			for _, orphan := range orphans {
@@ -149,11 +178,14 @@ func runRemove(cmd *cobra.Command, args []string) error {
 					fmt.Printf("  \033[31m✗\033[0m %s: %v\n", orphan, err)
 					continue
 				}
+				graph.Remove(types.NewPackageName(orphan).Normalized())
 				fmt.Printf("  \033[32m✓\033[0m Removed %s \033[2m(unused dependency)\033[0m\n", orphan)
 				removed++
 			}
 		}
 	}
+
+	graph.Save(envPath)
 
 	if removed > 0 {
 		fmt.Printf("\n  %d package(s) removed.\n", removed)
