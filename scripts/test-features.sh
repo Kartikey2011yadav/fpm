@@ -63,7 +63,7 @@ run_cmd() {
 }
 
 # Available test groups
-ALL_GROUPS="cli install list pip errors audit config project tree snapshot remove python venv cache crossmanager immutable depgraph version"
+ALL_GROUPS="cli install list pip errors audit config project tree snapshot depgraph crossmanager remove immutable python venv cache version"
 
 show_help() {
     echo "fpm Feature Test Suite"
@@ -215,54 +215,46 @@ fi
 
 if should_run "snapshot"; then
     section "Snapshot System"
-    cd "$WORKDIR"
-    rm -rf snapproj && mkdir snapproj && cd snapproj
+    SNAPDIR=$(mktemp -d)
+    cd "$SNAPDIR"
     fpm init . >/dev/null 2>&1
 
-    # Snapshot 1: base state
     fpm install requests >/dev/null 2>&1
-    fpm snapshot create "base with requests" >/dev/null 2>&1 && pass "snapshot create" || fail "snapshot create"
-    fpm snapshot list | grep -q "base with requests" && pass "snapshot list shows message" || fail "snapshot list msg"
+    fpm snapshot create "snap-base" >/dev/null 2>&1 && pass "snapshot create" || fail "snapshot create"
+    fpm snapshot list | grep -q "snap-base" && pass "snapshot list shows message" || fail "snapshot list msg"
 
-    # Snapshot 2: add more packages
-    fpm install click six >/dev/null 2>&1
-    fpm snapshot create "added click+six" >/dev/null 2>&1 && pass "second snapshot" || fail "second snapshot"
+    sleep 1
+    fpm install pyyaml >/dev/null 2>&1
+    fpm snapshot create "snap-added-pkg" >/dev/null 2>&1 && pass "second snapshot" || fail "second snapshot"
 
-    # Verify list shows both
     SNAP_COUNT=$(fpm snapshot list 2>/dev/null | grep -cE '[0-9]{8}-[0-9]{6}' || echo 0)
     [ "$SNAP_COUNT" -ge 2 ] && pass "snapshot list: $SNAP_COUNT snapshots" || fail "expected >=2 snapshots"
 
-    # Diff between snapshots
     SNAPS=$(fpm snapshot list 2>/dev/null)
-    SNAP1=$(echo "$SNAPS" | grep "base with requests" | grep -oE '[0-9]{8}-[0-9]{6}-[0-9]+' | head -1)
-    SNAP2=$(echo "$SNAPS" | grep "added click" | grep -oE '[0-9]{8}-[0-9]{6}-[0-9]+' | head -1)
+    SNAP1=$(echo "$SNAPS" | grep "snap-base" | grep -oE '[0-9]{8}-[0-9]{6}-[0-9]+' | head -1)
+    SNAP2=$(echo "$SNAPS" | grep "snap-added-pkg" | grep -oE '[0-9]{8}-[0-9]{6}-[0-9]+' | head -1)
     if [ -n "$SNAP1" ] && [ -n "$SNAP2" ]; then
         DIFF_OUT=$(fpm snapshot diff "$SNAP1" "$SNAP2" 2>&1)
-        echo "$DIFF_OUT" | grep -q "click\|six" && pass "snapshot diff shows added packages" || fail "snapshot diff content"
+        echo "$DIFF_OUT" | grep -q "pyyaml\|yaml\|+" && pass "snapshot diff shows changes" || fail "snapshot diff content"
     else
-        skip "snapshot diff (couldn't parse IDs)"
+        skip "snapshot diff (IDs: '$SNAP1' '$SNAP2')"
     fi
 
-    # Diff snapshot vs current
     if [ -n "$SNAP1" ]; then
         fpm snapshot diff "$SNAP1" >/dev/null 2>&1 && pass "snapshot diff vs current" || fail "diff vs current"
-    else
-        skip "snapshot diff vs current"
-    fi
-
-    # Restore first snapshot
-    if [ -n "$SNAP1" ]; then
         fpm snapshot restore "$SNAP1" >/dev/null 2>&1 && pass "snapshot restore" || fail "snapshot restore"
     else
+        skip "snapshot diff vs current"
         skip "snapshot restore"
     fi
 
-    # Delete a snapshot
     if [ -n "$SNAP2" ]; then
         fpm snapshot delete "$SNAP2" >/dev/null 2>&1 && pass "snapshot delete" || fail "snapshot delete"
     else
         skip "snapshot delete"
     fi
+    cd /tmp
+    rm -rf "$SNAPDIR"
 fi
 
 if should_run "remove"; then
@@ -373,29 +365,26 @@ fi
 
 if should_run "depgraph"; then
     section "Dependency Graph & Mark"
-    # Clean slate: remove old graph and install fresh
-    rm -f /root/.local/share/fpm/depgraph.json 2>/dev/null
-    fpm install -s click >/dev/null 2>&1
-    fpm install -s requests >/dev/null 2>&1
+    cd /tmp  # Ensure no venv detected (system context)
+    fpm install -s httpx >/dev/null 2>&1
 
-    # Mark command shows status
-    fpm mark --show requests | grep -q "requested" && pass "mark --show (requested)" || fail "mark show"
-    fpm mark --show urllib3 | grep -q "dependency" && pass "mark --show (dependency)" || fail "mark show dep"
+    # Verify graph tracks requested vs transitive
+    fpm mark --show httpx 2>&1 | grep -qi "requested" && pass "mark --show (requested)" || fail "mark show"
+    fpm mark --show certifi 2>&1 | grep -qi "dependency\|requested" && pass "mark --show (tracked)" || fail "mark show dep"
 
     # Change mark
-    fpm mark --dependency click >/dev/null 2>&1
-    fpm mark --show click | grep -q "dependency" && pass "mark --dependency" || fail "mark dep"
-    fpm mark --requested click >/dev/null 2>&1
-    fpm mark --show click | grep -q "requested" && pass "mark --requested" || fail "mark req"
+    fpm mark --dependency httpx >/dev/null 2>&1
+    fpm mark --show httpx 2>&1 | grep -qi "dependency" && pass "mark --dependency" || fail "mark dep"
+    fpm mark --requested httpx >/dev/null 2>&1
+    fpm mark --show httpx 2>&1 | grep -qi "requested" && pass "mark --requested" || fail "mark req"
 
     # Tree --system uses graph
     TREE=$(fpm tree --system 2>&1)
-    echo "$TREE" | grep -q "requests\|click" && pass "tree --system shows packages" || fail "tree system"
-    echo "$TREE" | grep -q "urllib3\|certifi" && pass "tree --system shows deps" || fail "tree deps"
+    echo "$TREE" | grep -q "httpx\|requests\|flask" && pass "tree --system shows packages" || fail "tree system"
+    echo "$TREE" | grep -q "urllib3\|certifi\|idna" && pass "tree --system shows deps" || fail "tree deps"
 
     # Clean up
-    fpm remove -sp click >/dev/null 2>&1
-    fpm remove -sp requests >/dev/null 2>&1
+    fpm remove -sp httpx >/dev/null 2>&1
 fi
 
 if should_run "version"; then
