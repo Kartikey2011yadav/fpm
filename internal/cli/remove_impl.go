@@ -66,14 +66,13 @@ func runAutoremove(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	fmt.Printf("  Found %d orphaned package(s):\n\n", len(orphans))
-	for _, name := range orphans {
-		fmt.Printf("    \033[2m-\033[0m %s\n", name)
+	confirmed := confirmRemoval(orphans)
+	if confirmed == nil {
+		return nil
 	}
 
-	fmt.Printf("\n  Removing %d package(s)...\n", len(orphans))
 	removed := 0
-	for _, name := range orphans {
+	for _, name := range confirmed {
 		pkgName := types.NewPackageName(name)
 		if err := uninstallPackage(targetSitePackages, pkgName); err != nil {
 			fmt.Printf("  \033[31m✗\033[0m %s: %v\n", name, err)
@@ -171,16 +170,19 @@ func runRemove(cmd *cobra.Command, args []string) error {
 			orphans = findOrphanDeps(targetSitePackages, args)
 		}
 		if len(orphans) > 0 {
-			fmt.Printf("\n  Removing %d unused dependencies:\n", len(orphans))
-			for _, orphan := range orphans {
-				pkgName := types.NewPackageName(orphan)
-				if err := uninstallPackage(targetSitePackages, pkgName); err != nil {
-					fmt.Printf("  \033[31m✗\033[0m %s: %v\n", orphan, err)
-					continue
+			confirmed := confirmRemoval(orphans)
+			if confirmed != nil {
+				fmt.Printf("\n  Removing %d unused dependencies:\n", len(confirmed))
+				for _, orphan := range confirmed {
+					pkgName := types.NewPackageName(orphan)
+					if err := uninstallPackage(targetSitePackages, pkgName); err != nil {
+						fmt.Printf("  \033[31m✗\033[0m %s: %v\n", orphan, err)
+						continue
+					}
+					graph.Remove(types.NewPackageName(orphan).Normalized())
+					fmt.Printf("  \033[32m✓\033[0m Removed %s \033[2m(unused dependency)\033[0m\n", orphan)
+					removed++
 				}
-				graph.Remove(types.NewPackageName(orphan).Normalized())
-				fmt.Printf("  \033[32m✓\033[0m Removed %s \033[2m(unused dependency)\033[0m\n", orphan)
-				removed++
 			}
 		}
 	}
@@ -191,6 +193,76 @@ func runRemove(cmd *cobra.Command, args []string) error {
 		fmt.Printf("\n  %d package(s) removed.\n", removed)
 	}
 	return nil
+}
+
+func confirmRemoval(packages []string) []string {
+	fmt.Printf("\n  Found %d unused package(s):\n\n", len(packages))
+	for _, name := range packages {
+		fmt.Printf("    \033[2m×\033[0m %s\n", name)
+	}
+
+	// Non-interactive mode: remove all
+	if !isInteractive() {
+		return packages
+	}
+
+	fmt.Printf("\n  \033[1m?\033[0m Action:\n")
+	fmt.Printf("    [a] Remove all (%d packages)\n", len(packages))
+	fmt.Printf("    [e] Exclude some (select which to keep)\n")
+	fmt.Printf("    [n] Abort (remove nothing)\n")
+	fmt.Printf("\n  Choice [a/e/n]: ")
+
+	var input string
+	fmt.Scanln(&input)
+	input = strings.TrimSpace(strings.ToLower(input))
+
+	switch input {
+	case "a", "":
+		return packages
+	case "n":
+		fmt.Println("  Aborted.")
+		return nil
+	case "e":
+		return excludePackages(packages)
+	default:
+		return packages
+	}
+}
+
+func excludePackages(packages []string) []string {
+	fmt.Printf("\n  Enter package names to KEEP (comma-separated):\n")
+	fmt.Printf("  > ")
+
+	var input string
+	fmt.Scanln(&input)
+
+	keepSet := make(map[string]bool)
+	for _, name := range strings.Split(input, ",") {
+		name = strings.TrimSpace(strings.ToLower(name))
+		if name != "" {
+			keepSet[name] = true
+		}
+	}
+
+	var result []string
+	for _, pkg := range packages {
+		if !keepSet[strings.ToLower(pkg)] {
+			result = append(result, pkg)
+		}
+	}
+
+	if len(keepSet) > 0 {
+		fmt.Printf("  Keeping %d package(s), removing %d.\n", len(keepSet), len(result))
+	}
+	return result
+}
+
+func isInteractive() bool {
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
 }
 
 func findOrphanDeps(sitePackages string, removedPkgs []string) []string {
