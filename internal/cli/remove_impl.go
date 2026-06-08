@@ -77,6 +77,7 @@ func runAutoremove(cmd *cobra.Command, args []string) error {
 func runRemove(cmd *cobra.Command, args []string) error {
 	cwd, _ := os.Getwd()
 	purge, _ := cmd.Flags().GetBool("purge")
+	force, _ := cmd.Flags().GetBool("force")
 
 	// Determine target site-packages
 	var targetSitePackages string
@@ -118,7 +119,7 @@ func runRemove(cmd *cobra.Command, args []string) error {
 	removed := 0
 	for _, name := range args {
 		pkgName := types.NewPackageName(name)
-		if err := uninstallPackage(targetSitePackages, pkgName); err != nil {
+		if err := uninstallPackage(targetSitePackages, pkgName, force); err != nil {
 			fmt.Printf("  \033[31m✗\033[0m %s: %v\n", name, err)
 			continue
 		}
@@ -247,7 +248,8 @@ func readPackageDeps(distInfoPath string) []string {
 	return deps
 }
 
-func uninstallPackage(sitePackages string, name types.PackageName) error {
+func uninstallPackage(sitePackages string, name types.PackageName, force ...bool) error {
+	forceRemove := len(force) > 0 && force[0]
 	// Find the dist-info directory
 	entries, err := os.ReadDir(sitePackages)
 	if err != nil {
@@ -271,16 +273,18 @@ func uninstallPackage(sitePackages string, name types.PackageName) error {
 		return fmt.Errorf("package not found in %s", sitePackages)
 	}
 
-	// Check INSTALLER — only remove fpm-installed packages
-	installerPath := filepath.Join(distInfoDir, "INSTALLER")
-	if data, err := os.ReadFile(installerPath); err == nil {
-		mgr := strings.TrimSpace(string(data))
-		if mgr != "fpm" && mgr != "" {
-			scanner := env.NewScanner([]string{sitePackages})
-			result, _ := scanner.Scan()
-			found := result.FindByName(name)
-			if len(found) > 0 {
-				return fmt.Errorf("installed by %s, not fpm (use %s to remove)", found[0].Manager, found[0].Manager)
+	// Check INSTALLER — only remove fpm-installed packages (unless --force)
+	if !forceRemove {
+		installerPath := filepath.Join(distInfoDir, "INSTALLER")
+		if data, err := os.ReadFile(installerPath); err == nil {
+			mgr := strings.TrimSpace(string(data))
+			if mgr != "fpm" && mgr != "" {
+				scanner := env.NewScanner([]string{sitePackages})
+				result, _ := scanner.Scan()
+				found := result.FindByName(name)
+				if len(found) > 0 {
+					return fmt.Errorf("installed by %s, not fpm (use --force to remove anyway)", found[0].Manager)
+				}
 			}
 		}
 	}

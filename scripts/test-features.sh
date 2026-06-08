@@ -266,9 +266,31 @@ fi
 
 if should_run "remove"; then
     section "Remove & Uninstall"
-    cd "$WORKDIR/project" 2>/dev/null || { mkdir -p "$WORKDIR/rmtest" && cd "$WORKDIR/rmtest" && fpm init . >/dev/null 2>&1 && fpm install click requests >/dev/null 2>&1; }
-    fpm remove click >/dev/null 2>&1 && pass "fpm remove" || fail "fpm remove"
-    fpm uninstall requests >/dev/null 2>&1 && pass "fpm uninstall (alias)" || fail "uninstall"
+    cd "$WORKDIR"
+    rm -rf rmtest && mkdir rmtest && cd rmtest
+    fpm init . >/dev/null 2>&1
+    fpm install flask click >/dev/null 2>&1
+
+    # Basic remove
+    fpm remove click >/dev/null 2>&1 && pass "fpm remove (venv)" || fail "fpm remove"
+    fpm uninstall flask >/dev/null 2>&1 && pass "fpm uninstall alias" || fail "uninstall alias"
+
+    # Autoremove cleans orphans
+    ORPHANS=$(fpm autoremove 2>&1)
+    echo "$ORPHANS" | grep -q "Removed\|No orphaned" && pass "fpm autoremove (venv)" || fail "autoremove"
+
+    # System remove
+    fpm install -s six >/dev/null 2>&1
+    fpm remove -s six >/dev/null 2>&1 && pass "fpm remove -s (system)" || fail "remove -s"
+
+    # Force remove (other manager)
+    ERR=$(fpm remove -s pip 2>&1 || true)
+    echo "$ERR" | grep -q "force" && pass "blocks non-fpm without --force" || fail "force guard"
+
+    # --purge
+    fpm install -s requests >/dev/null 2>&1
+    PURGE=$(fpm remove -s requests --purge 2>&1)
+    echo "$PURGE" | grep -q "unused dependency\|Removed" && pass "remove --purge cleans deps" || fail "purge"
 fi
 
 if should_run "python"; then

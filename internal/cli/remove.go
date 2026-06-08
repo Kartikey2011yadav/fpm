@@ -43,6 +43,7 @@ as dependencies but are no longer needed by any other package.`,
 
 func init() {
 	removeCmd.Flags().Bool("purge", false, "Also remove unused dependencies")
+	removeCmd.Flags().Bool("force", false, "Remove even if installed by another manager (pip, uv, conda)")
 	rootCmd.AddCommand(removeCmd)
 	rootCmd.AddCommand(autoremoveCmd)
 }
