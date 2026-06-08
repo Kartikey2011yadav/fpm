@@ -27,8 +27,15 @@ Install packages. Aliases: `fpm add`.
 
 ### `fpm remove <packages...>`
 
-Remove packages from environment and pyproject.toml. Aliases: `fpm uninstall`,
-`fpm rm`.
+Remove packages from the environment. Aliases: `fpm uninstall`, `fpm rm`.
+
+- `-f`, `--force` — remove even if installed by another manager (pip, uv, conda)
+- `-p`, `--purge` — also remove unused dependencies
+- Combine flags: `fpm remove -sfp numpy` (system + force + purge)
+
+### `fpm autoremove`
+
+Find and remove orphaned packages not required by anything else.
 
 ### `fpm list`
 

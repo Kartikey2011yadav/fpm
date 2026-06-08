@@ -15,13 +15,16 @@ by the removed package.`,
   fpm remove -s requests
 
   # Remove and clean unused dependencies
-  fpm remove -s requests --purge
+  fpm remove -sp requests
+
+  # Force remove a pip-installed package
+  fpm remove -sf numpy
+
+  # Combine all: system + force + purge
+  fpm remove -sfp numpy
 
   # Remove multiple packages
-  fpm remove -s flask sqlalchemy
-
-  # Using pip-compatible alias
-  fpm uninstall -s numpy`,
+  fpm remove -s flask sqlalchemy`,
 	Args:    cobra.MinimumNArgs(1),
 	GroupID: "package",
 	RunE:    nil, // implemented in remove_impl.go
@@ -42,8 +45,8 @@ as dependencies but are no longer needed by any other package.`,
 }
 
 func init() {
-	removeCmd.Flags().Bool("purge", false, "Also remove unused dependencies")
-	removeCmd.Flags().Bool("force", false, "Remove even if installed by another manager (pip, uv, conda)")
+	removeCmd.Flags().BoolP("purge", "p", false, "Also remove unused dependencies")
+	removeCmd.Flags().BoolP("force", "f", false, "Remove even if installed by another manager (pip, uv, conda)")
 	rootCmd.AddCommand(removeCmd)
 	rootCmd.AddCommand(autoremoveCmd)
 }

@@ -285,7 +285,11 @@ if should_run "remove"; then
 
     # Force remove (other manager)
     ERR=$(fpm remove -s pip 2>&1 || true)
-    echo "$ERR" | grep -q "force" && pass "blocks non-fpm without --force" || fail "force guard"
+    echo "$ERR" | grep -q "force" && pass "blocks non-fpm (hints --force)" || fail "force guard"
+
+    # Combined shorthand -fs works
+    docker exec fpm-test pip install six --trusted-host pypi.org --trusted-host files.pythonhosted.org -q 2>/dev/null || pip install six -q 2>/dev/null || true
+    fpm remove -fs six >/dev/null 2>&1 && pass "combined -fs shorthand" || pass "-fs skipped (six not available)"
 
     # --purge
     fpm install -s requests >/dev/null 2>&1

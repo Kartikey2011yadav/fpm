@@ -228,12 +228,28 @@ fpm cache clean              # remove everything
 
 ---
 
-## Scenario 13: Remove & Aliases
+## Scenario 13: Remove, Purge & Autoremove
 
 ```bash
-fpm remove flask             # removes from pyproject.toml
+# Basic remove (venv)
+fpm remove flask             # removes flask, updates pyproject.toml
 fpm uninstall numpy          # alias for remove
 fpm rm click                 # short alias
+
+# System remove
+fpm remove -s requests       # remove from system Python
+
+# Purge unused dependencies
+fpm remove -sp flask         # remove flask + all orphaned deps
+
+# Force remove (other manager's package)
+fpm remove -s uv             # → blocks: "installed by pip (use --force)"
+fpm remove -fs uv            # removes regardless of manager
+fpm remove -sfp numpy        # system + force + purge (all combined)
+
+# Autoremove orphans
+fpm autoremove               # in venv: clean orphaned deps
+fpm autoremove --system      # system-wide: clean orphaned deps
 ```
 
 ---
