@@ -80,6 +80,25 @@ $ fpm install numpy==2.0.0
   error: cannot install numpy ==2.0.0: pinned as immutable at 1.24.0 in fpm.toml
 ```
 
+### Smart Dependency Management (like apt/pacman)
+
+fpm tracks which packages you asked for vs which came as dependencies.
+Only you decide what stays:
+
+```bash
+$ fpm install -s flask            # flask = REQUESTED (protected)
+                                  # jinja2, click, etc. = DEPENDENCY (removable)
+
+$ fpm remove -sp flask            # removes flask + only its unused deps
+                                  # keeps urllib3 if requests still needs it
+
+$ fpm autoremove --system         # clean ALL orphaned deps
+$ fpm mark --requested click      # protect click from autoremove
+$ fpm tree --system               # visualize the full dependency graph
+```
+
+No other Python package manager tracks this. pip/uv leave orphans forever.
+
 ### Zero-Duplication Storage
 
 fpm stores every package once (content-addressable by SHA256) and links it into
@@ -130,6 +149,8 @@ fpm list -a                          # see ALL packages (pip, conda, etc.)
 | `fpm install <pkg>` | Install packages (alias: `add`) |
 | `fpm remove <pkg>` | Remove (aliases: `uninstall`, `rm`, flags: `-f` `-p`) |
 | `fpm autoremove` | Remove orphaned unused dependencies |
+| `fpm mark --show <pkg>` | Show if package is requested/dependency |
+| `fpm mark --requested <pkg>` | Protect package from autoremove |
 | `fpm list` | List fpm packages (alias: `ls`) |
 | `fpm list -a` | List ALL packages (all managers) |
 | `fpm sync` | Sync environment from lockfile |
@@ -212,6 +233,8 @@ level = "off"                   # debug | info | warn | error | off
 | Environment snapshots | No | No | Yes (instant restore) |
 | Cross-manager detection | No | No | Yes (pip, uv, conda, poetry, pdm) |
 | Immutable version pins | No | No | Yes (enforced by resolver) |
+| Dependency graph tracking | No | No | Yes (requested vs transitive) |
+| Autoremove orphans | No | No | Yes (like apt/pacman) |
 | Reflink support | No | No | Yes (CoW on APFS/btrfs) |
 | Reference-tracked GC | No | No | Yes (only removes orphans) |
 | Bundled CA certificates | certifi | webpki | Mozilla (built-in) |
