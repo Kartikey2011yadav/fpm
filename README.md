@@ -1,8 +1,28 @@
-# fpm — Fast Package Manager for Python
+<div align="center">
+
+```
+   ███████╗██████╗ ███╗   ███╗
+   ██╔════╝██╔══██╗████╗ ████║
+   █████╗  ██████╔╝██╔████╔██║
+   ██╔══╝  ██╔═══╝ ██║╚██╔╝██║
+   ██║     ██║     ██║ ╚═╝ ██║
+   ╚═╝     ╚═╝     ╚═╝     ╚═╝
+```
+
+# Fast Package Manager for Python
+
+**The package manager that sees everything, breaks nothing, and forgets nothing.**
 
 [![CI](https://github.com/Kartikey2011yadav/fpm/actions/workflows/ci.yml/badge.svg)](https://github.com/Kartikey2011yadav/fpm/actions/workflows/ci.yml)
 [![Go](https://img.shields.io/badge/Go-1.25-blue)](https://go.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)]()
+
+[Install](#install) &bull; [Quick Start](#quick-start) &bull; [Documentation](docs/concepts/README.md) &bull; [Why fpm?](#why-fpm)
+
+</div>
+
+---
 
 A next-generation Python package manager that **coexists** with your existing tools.
 Written in Go for speed. Designed for teams who need reproducibility, safety, and
