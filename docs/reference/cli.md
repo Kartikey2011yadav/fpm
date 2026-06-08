@@ -4,16 +4,17 @@
 
 All commands support these flags:
 
-| Flag                           | Short | Description                                  |
-| ------------------------------ | ----- | -------------------------------------------- |
-| `--version`                    | `-V`  | Print version and exit                       |
-| `--global`                     |       | Apply to system environment instead of local |
-| `--verbose`                    | `-v`  | Enable verbose output                        |
-| `--quiet`                      | `-q`  | Suppress output except errors                |
-| `--json`                       |       | Output in JSON format                        |
-| `--no-progress`                |       | Disable progress bars                        |
-| `--color <mode>`               |       | Color output: auto, always, never            |
-| `--allow-insecure-host <host>` |       | Skip TLS verification for specific hosts     |
+| Flag                           | Short | Description                                |
+| ------------------------------ | ----- | ------------------------------------------ |
+| `--version`                    | `-v`  | Print version and exit                     |
+| `--system`                     | `-s`  | Install into system Python instead of venv |
+| `--verbose`                    |       | Enable verbose output                      |
+| `--quiet`                      | `-q`  | Suppress output except errors              |
+| `--json`                       |       | Output in JSON format                      |
+| `--no-progress`                |       | Disable progress bars                      |
+| `--color <mode>`               |       | Color output: auto, always, never          |
+| `--allow-insecure-host <host>` |       | Skip TLS verification for specific hosts   |
+| `--log-level <level>`          |       | Log level: debug, info, warn, error, off   |
 
 ## Package Commands
 
@@ -21,8 +22,8 @@ All commands support these flags:
 
 Install packages. Aliases: `fpm add`.
 
-- `--global` — install system-wide instead of into local venv
-- Without a venv, installs globally (like pip without a venv)
+- `--system` / `-s` — install into system Python (required when no venv)
+- Without a venv and without `--system`, errors (like uv)
 
 ### `fpm remove <packages...>`
 
@@ -102,7 +103,7 @@ Download and install Python versions.
 
 ### `fpm python use <version>`
 
-Switch active Python. Local by default, `--global` for system-wide.
+Switch active Python. Local by default, `--system` for system-wide.
 
 ### `fpm python pin <version>`
 
@@ -193,4 +194,35 @@ Update fpm to the latest version.
 
 ### `fpm version`
 
-Show fpm version. Also available as `fpm --version` or `fpm -V`.
+Show fpm version. Also available as `fpm --version` or `fpm -v`.
+
+### `fpm repair`
+
+Diagnose and fix common installation issues. Checks:
+
+- Missing directories (auto-creates)
+- Cache integrity
+- Python availability
+- Bin directory in PATH
+- Broken symlinks (auto-removes)
+- Configuration file validity
+
+### `fpm config show`
+
+Display all current settings: directories, concurrency, link mode, logging,
+indexes, and which config files are active.
+
+### `fpm config set <key> <value>`
+
+Set a user-level configuration value. Saved to `~/.config/fpm/config.toml`.
+
+```bash
+fpm config set log.level debug
+fpm config set tool.concurrency 100
+fpm config set cache.dir /tmp/fpm-cache
+```
+
+### `fpm config init`
+
+Create a default user configuration file with documented options. Will not
+overwrite an existing file.

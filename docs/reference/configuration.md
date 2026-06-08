@@ -55,6 +55,10 @@ allow-insecure-host = ["internal-pypi.corp.example.com"]
 # system-certs = true       # force platform certificate verifier
 # client-cert = "/path/to/cert.pem"
 # client-key = "/path/to/key.pem"
+
+[log]
+level = "off"               # debug | info | warn | error | off
+# file = ""                 # custom log file (default: ~/.local/share/fpm/logs/fpm.log)
 ```
 
 ## Configuration Hierarchy

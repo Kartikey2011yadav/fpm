@@ -21,7 +21,7 @@ pinning, and content-addressable caching.
 - **Python version management** — install and switch between Python versions
   per-project
 - **Universal lockfile** — cross-platform lockfile for reproducible installs
-- **Global/local scope** — `--global` for system-wide, local by default (safe)
+- **Global/local scope** — `--system` for system-wide, local by default (safe)
 - **Works everywhere** — Linux, macOS, Windows, servers, Jupyter, CI/CD
 
 ## Installation
@@ -116,7 +116,7 @@ fpm list
 | `fpm venv [path]`           | Create virtual environment                     |
 | `fpm python list`           | List Python versions                           |
 | `fpm python install <ver>`  | Install Python version                         |
-| `fpm python use <ver>`      | Switch Python (local or `--global`)            |
+| `fpm python use <ver>`      | Switch Python (local or `--system`)            |
 | `fpm snapshot create [msg]` | Capture environment state                      |
 | `fpm snapshot list`         | Show snapshot history                          |
 | `fpm snapshot restore <id>` | Restore previous state                         |
@@ -130,20 +130,25 @@ fpm list
 | `fpm pip freeze`            | Output requirements format                     |
 | `fpm tool run <pkg>`        | Run tool in ephemeral env                      |
 | `fpm tool install <pkg>`    | Install tool permanently                       |
-| `fpm version`               | Show version (also: `fpm --version`, `fpm -V`) |
+| `fpm version`               | Show version (also: `fpm --version`, `fpm -v`) |
+| `fpm repair`                | Diagnose and fix installation issues           |
+| `fpm config show`           | Show current configuration and paths           |
+| `fpm config set <k> <v>`    | Modify user configuration                      |
+| `fpm config init`           | Create default user config file                |
 
 ### Global Flags
 
-| Flag                           | Description                                  |
-| ------------------------------ | -------------------------------------------- |
-| `-V`, `--version`              | Print version and exit                       |
-| `--global`                     | Apply to system environment instead of local |
-| `--verbose`, `-v`              | Enable verbose output                        |
-| `--quiet`, `-q`                | Suppress output except errors                |
-| `--json`                       | Output in JSON format                        |
-| `--no-progress`                | Disable progress bars                        |
-| `--color <mode>`               | Control colors (auto/always/never)           |
-| `--allow-insecure-host <host>` | Skip TLS verification for specific hosts     |
+| Flag                           | Description                                |
+| ------------------------------ | ------------------------------------------ |
+| `-v`, `--version`              | Print version and exit                     |
+| `-s`, `--system`               | Install into system Python instead of venv |
+| `--verbose`                    | Enable verbose output                      |
+| `-q`, `--quiet`                | Suppress output except errors              |
+| `--json`                       | Output in JSON format                      |
+| `--no-progress`                | Disable progress bars                      |
+| `--color <mode>`               | Control colors (auto/always/never)         |
+| `--allow-insecure-host <host>` | Skip TLS verification for specific hosts   |
+| `--log-level <level>`          | Logging: debug, info, warn, error, off     |
 
 ## Environment Snapshots
 
@@ -206,7 +211,7 @@ fpm venv --python 3.11
 # → Auto-downloads Python 3.11 if not installed
 
 # Switch global default
-fpm python use 3.12 --global
+fpm python use 3.12 --system
 ```
 
 ## Configuration
@@ -231,6 +236,10 @@ packages = [
 
 [cache]
 dir = "/custom/cache/path"  # override default cache location
+
+[log]
+level = "off"  # debug, info, warn, error, off
+# file = ""    # custom log file path
 ```
 
 ### Configuration hierarchy (later overrides earlier):
