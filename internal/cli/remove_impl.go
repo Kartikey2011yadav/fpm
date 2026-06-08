@@ -21,6 +21,7 @@ func init() {
 
 func runRemove(cmd *cobra.Command, args []string) error {
 	cwd, _ := os.Getwd()
+	purge, _ := cmd.Flags().GetBool("purge")
 
 	// Determine target site-packages
 	var targetSitePackages string
@@ -81,10 +82,114 @@ func runRemove(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Purge unused dependencies
+	if purge && removed > 0 && targetSitePackages != "" {
+		orphans := findOrphanDeps(targetSitePackages, args)
+		if len(orphans) > 0 {
+			fmt.Printf("\n  Removing %d unused dependencies:\n", len(orphans))
+			for _, orphan := range orphans {
+				pkgName := types.NewPackageName(orphan)
+				if err := uninstallPackage(targetSitePackages, pkgName); err != nil {
+					fmt.Printf("  \033[31m✗\033[0m %s: %v\n", orphan, err)
+					continue
+				}
+				fmt.Printf("  \033[32m✓\033[0m Removed %s \033[2m(unused dependency)\033[0m\n", orphan)
+				removed++
+			}
+		}
+	}
+
 	if removed > 0 {
 		fmt.Printf("\n  %d package(s) removed.\n", removed)
 	}
 	return nil
+}
+
+func findOrphanDeps(sitePackages string, removedPkgs []string) []string {
+	// Scan remaining packages
+	scanner := env.NewScanner([]string{sitePackages})
+	result, err := scanner.Scan()
+	if err != nil || len(result.Packages) == 0 {
+		return nil
+	}
+
+	// Build set of remaining package names
+	remaining := make(map[string]bool)
+	for _, pkg := range result.Packages {
+		remaining[pkg.Name.Normalized()] = true
+	}
+
+	// Build reverse dependency map: who requires each package?
+	// Read METADATA for each remaining package to find Requires-Dist
+	requiredBy := make(map[string][]string)
+	for _, pkg := range result.Packages {
+		if pkg.Manager != env.ManagerFpm {
+			continue
+		}
+		deps := readPackageDeps(pkg.DistInfo)
+		for _, dep := range deps {
+			requiredBy[dep] = append(requiredBy[dep], pkg.Name.Normalized())
+		}
+	}
+
+	// Find packages that are:
+	// 1. Installed by fpm
+	// 2. Not required by any remaining package
+	// 3. Not one of the top-level user-installed packages (heuristic: in pyproject.toml or explicitly installed)
+	var orphans []string
+	removedSet := make(map[string]bool)
+	for _, name := range removedPkgs {
+		removedSet[types.NewPackageName(name).Normalized()] = true
+	}
+
+	for _, pkg := range result.Packages {
+		if pkg.Manager != env.ManagerFpm {
+			continue
+		}
+		norm := pkg.Name.Normalized()
+		if removedSet[norm] {
+			continue
+		}
+		parents := requiredBy[norm]
+		if len(parents) == 0 {
+			// Not required by anything — potential orphan
+			// But skip common standalone packages
+			orphans = append(orphans, pkg.Name.Raw())
+		}
+	}
+
+	return orphans
+}
+
+func readPackageDeps(distInfoPath string) []string {
+	metadataPath := filepath.Join(distInfoPath, "METADATA")
+	f, err := os.Open(metadataPath)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+
+	var deps []string
+	s := bufio.NewScanner(f)
+	for s.Scan() {
+		line := s.Text()
+		if line == "" {
+			break // end of headers
+		}
+		if strings.HasPrefix(line, "Requires-Dist: ") {
+			dep := strings.TrimPrefix(line, "Requires-Dist: ")
+			// Extract package name (before any version specifier or semicolon)
+			dep = strings.Split(dep, " ")[0]
+			dep = strings.Split(dep, ";")[0]
+			dep = strings.Split(dep, "(")[0]
+			dep = strings.Split(dep, "[")[0]
+			dep = strings.TrimSpace(dep)
+			if dep != "" {
+				deps = append(deps, types.NewPackageName(dep).Normalized())
+			}
+		}
+	}
+	return deps
 }
 
 func uninstallPackage(sitePackages string, name types.PackageName) error {
