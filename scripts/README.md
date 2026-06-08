@@ -63,7 +63,7 @@ docker exec fpm-test bash /tmp/test-features.sh
 | `project`      | 8     | init, install, lock, run, pyproject.toml  |
 | `tree`         | 2     | Dependency tree + lock command            |
 | `snapshot`     | 4     | Create, list, diff snapshots              |
-| `remove`       | 2     | Remove + uninstall alias                  |
+| `remove`       | 7     | Remove, purge, autoremove, --force, -s    |
 | `python`       | 2     | Python version discovery                  |
 | `venv`         | 3     | Virtual environment creation              |
 | `cache`        | 1     | Cache size reporting                      |

@@ -128,7 +128,8 @@ fpm list -a                          # see ALL packages (pip, conda, etc.)
 | Command | Description |
 |---------|-------------|
 | `fpm install <pkg>` | Install packages (alias: `add`) |
-| `fpm remove <pkg>` | Remove (aliases: `uninstall`, `rm`) |
+| `fpm remove <pkg>` | Remove (aliases: `uninstall`, `rm`, flags: `-f` `-p`) |
+| `fpm autoremove` | Remove orphaned unused dependencies |
 | `fpm list` | List fpm packages (alias: `ls`) |
 | `fpm list -a` | List ALL packages (all managers) |
 | `fpm sync` | Sync environment from lockfile |

@@ -92,7 +92,7 @@ show_list() {
     echo "  project      Full project workflow (init, install, run, lock)"
     echo "  tree         Dependency tree"
     echo "  snapshot     Environment snapshots (create, list, diff)"
-    echo "  remove       Package removal + aliases"
+    echo "  remove       Remove, purge, autoremove, --force"
     echo "  python       Python version discovery"
     echo "  venv         Virtual environment creation"
     echo "  cache        Cache management"

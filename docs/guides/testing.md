@@ -132,7 +132,7 @@ docker exec fpm-test cat /tmp/fpm-test.log
 | `project`      | Full project workflow (init → run)      |
 | `tree`         | Dependency tree display                 |
 | `snapshot`     | Environment snapshots                   |
-| `remove`       | Package removal + aliases               |
+| `remove`       | Remove, purge, autoremove, --force      |
 | `python`       | Python version discovery                |
 | `venv`         | Virtual environment creation            |
 | `cache`        | Cache management                        |
