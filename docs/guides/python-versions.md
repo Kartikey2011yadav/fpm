@@ -50,7 +50,7 @@ This writes `.python-version` in the current directory. Only this project uses
 ### System-Wide
 
 ```bash
-fpm python use 3.12 --global
+fpm python use 3.12 --system
 ```
 
 Updates symlinks in `~/.local/share/fpm/bin/`. Add this to your PATH to use

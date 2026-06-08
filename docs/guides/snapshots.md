@@ -91,7 +91,7 @@ Snapshots are per-environment:
 
 - Each project's `.venv` has its own snapshot history
 - Project A's snapshots are independent of Project B's
-- Use `--global` for system-level snapshots
+- Use `--system` for system-level snapshots
 
 ## Deleting Snapshots
 

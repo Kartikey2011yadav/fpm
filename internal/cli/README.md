@@ -33,4 +33,4 @@ Each command has two files:
 ## Global Flags
 
 Defined in `root.go`: `--verbose`, `--quiet`, `--color`, `--no-progress`,
-`--json`, `--global`.
+`--json`, `--system`.

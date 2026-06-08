@@ -28,7 +28,7 @@
 | --------------------- | ----------------------------------------- |
 | Inside venv (default) | `.venv/lib/python3.X/site-packages/`      |
 | No venv (system-wide) | `/usr/local/lib/python3.X/dist-packages/` |
-| `--global` flag       | Forces system-wide even inside a venv     |
+| `--system` flag       | Forces system-wide even inside a venv     |
 
 ### Project Files
 

@@ -90,7 +90,7 @@ with a clear message.
 fpm install requests
 
 # Install system-wide
-fpm install requests --global
+fpm install requests --system
 ```
 
 ## Viewing Dependencies

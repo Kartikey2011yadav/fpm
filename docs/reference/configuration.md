@@ -65,7 +65,7 @@ level = "off"               # debug | info | warn | error | off
 
 Priority (highest wins):
 
-1. CLI flags (`--global`, `--verbose`, etc.)
+1. CLI flags (`--system`, `--verbose`, etc.)
 2. Environment variables (`FPM_*`)
 3. Project config (`./fpm.toml`)
 4. User config (`~/.config/fpm/config.toml`)
