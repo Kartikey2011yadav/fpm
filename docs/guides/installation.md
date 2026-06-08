@@ -1,38 +1,86 @@
-# Installation
+# Installation Guide
 
-## Quick Install (recommended)
-
-### macOS / Linux
+## Quick Install (Recommended)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Kartikey2011yadav/fpm/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/Kartikey2011yadav/fpm/main/install.sh | bash
 ```
 
-### With custom install directory
+This launches an interactive installer with:
+- Platform detection (macOS/Linux, Intel/ARM)
+- Default vs Custom path selection
+- Disk space verification
+- Shell PATH configuration
 
+For CI/Docker (non-interactive):
 ```bash
-FPM_INSTALL_DIR=~/.local/bin curl -fsSL https://raw.githubusercontent.com/Kartikey2011yadav/fpm/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/Kartikey2011yadav/fpm/main/install.sh | bash -s -- --yes
 ```
 
-## Package Managers
+---
 
-### Homebrew (macOS/Linux)
+## All Installation Methods
 
-```bash
-brew install kartikeyyadav/tap/fpm
-```
+| Method | Command | Best for |
+|--------|---------|----------|
+| Install script | `curl ... \| bash` | Most users (interactive) |
+| pip | `pip install fpm-pkg` | Python developers |
+| Go | `go install .../cmd/fpm@latest` | Go developers |
+| Homebrew | `brew install kartikeyyadav/tap/fpm` | macOS users |
+| Docker | `docker run ghcr.io/kartikey2011yadav/fpm` | Containers/CI |
+| From source | `git clone && make build` | Contributors |
 
-### pip
+---
+
+## pip
 
 ```bash
 pip install fpm-pkg
 ```
 
-### go install
+This installs a thin Python wrapper that automatically downloads the correct
+native binary for your platform. After install, `fpm` is available in your PATH.
+
+Works on: macOS, Linux, Windows (Intel and ARM).
+
+---
+
+## Go
 
 ```bash
 go install github.com/kartikeyyadav/fpm/cmd/fpm@latest
 ```
+
+Requires Go 1.25+. The binary is placed in `$GOPATH/bin/`.
+
+---
+
+## Homebrew (macOS/Linux)
+
+```bash
+brew install kartikeyyadav/tap/fpm
+```
+
+Updates:
+```bash
+brew upgrade fpm
+```
+
+---
+
+## Docker
+
+```bash
+# Run directly
+docker run --rm -v $(pwd):/io ghcr.io/kartikey2011yadav/fpm install -s requests
+
+# Use in Dockerfile
+COPY --from=ghcr.io/kartikey2011yadav/fpm:latest /fpm /usr/local/bin/fpm
+```
+
+Multi-arch: supports `linux/amd64` and `linux/arm64`.
+
+---
 
 ## From Source
 
@@ -40,57 +88,245 @@ go install github.com/kartikeyyadav/fpm/cmd/fpm@latest
 git clone https://github.com/Kartikey2011yadav/fpm.git
 cd fpm
 make build
-sudo mv bin/fpm /usr/local/bin/
+./bin/fpm --version
 ```
 
-## Docker
+Cross-compile for all platforms:
+```bash
+make build-all
+# Outputs: bin/fpm-linux-amd64, bin/fpm-darwin-arm64, etc.
+```
+
+---
+
+## Custom Installation Paths
+
+### Via Interactive Installer
+
+Run `curl ... | bash` and select "Custom" mode. You'll be prompted for:
+- Binary path (`/usr/local/bin` vs `~/.local/bin` vs custom)
+- Cache directory (package downloads, metadata)
+- Data directory (Python versions, tools)
+- Tool bin directory (tool executables)
+
+### Via Environment Variables
 
 ```bash
-docker pull ghcr.io/kartikey2011yadav/fpm:latest
-docker run --rm -v $(pwd):/io ghcr.io/kartikey2011yadav/fpm install requests
+# Set before running installer
+FPM_INSTALL_DIR=/custom/bin curl ... | bash --yes
+
+# Or configure after install
+fpm config set cache.dir /data/fpm-cache
 ```
 
-## Custom Paths
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `FPM_INSTALL_DIR` | Binary location | `~/.local/bin` |
+| `FPM_CACHE_DIR` | Cache directory | `~/.cache/fpm` |
+| `FPM_DATA_DIR` | Data directory | `~/.local/share/fpm` |
+| `FPM_CONFIG_DIR` | Config directory | `~/.config/fpm` |
+| `FPM_TOOL_BIN_DIR` | Tool executables | `~/.local/bin` |
 
-By default, fpm uses platform-standard directories. Override with environment
-variables:
+---
 
-| Variable          | Default (Linux)      | Purpose                           |
-| ----------------- | -------------------- | --------------------------------- |
-| `FPM_CACHE_DIR`   | `~/.cache/fpm`       | Package cache (CAS, wheels, HTTP) |
-| `FPM_DATA_DIR`    | `~/.local/share/fpm` | Python installs, tools, bin       |
-| `FPM_CONFIG_DIR`  | `~/.config/fpm`      | User configuration                |
-| `FPM_INSTALL_DIR` | `/usr/local/bin`     | Where to place the fpm binary     |
+## Platform Compatibility
 
-Set these in your shell profile to persist:
+| Platform | Architecture | Status |
+|----------|-------------|--------|
+| macOS | Apple Silicon (M1/M2/M3/M4) | Supported |
+| macOS | Intel | Supported |
+| Linux | x86_64 | Supported |
+| Linux | ARM64 (Raspberry Pi, AWS Graviton) | Supported |
+| Windows | x86_64 | Supported |
+| Docker | linux/amd64, linux/arm64 | Supported |
+| JupyterHub | Per-user install | Supported |
+| Multi-user systems | Per-user or system-wide | Supported |
+
+---
+
+## Special Environments
+
+### JupyterHub / JupyterLab
+
+The installer auto-detects JupyterHub (`$JUPYTERHUB_USER`) and installs per-user:
 
 ```bash
-# ~/.bashrc or ~/.zshrc
-export FPM_CACHE_DIR="/opt/fpm/cache"
-export FPM_DATA_DIR="/opt/fpm/data"
+# In a Jupyter terminal
+curl -fsSL https://raw.githubusercontent.com/Kartikey2011yadav/fpm/main/install.sh | bash --yes
 ```
 
-## Verify Installation
+Binary goes to `~/.local/bin/fpm`, no sudo needed.
+
+### Multi-user Systems
+
+For shared systems (university clusters, shared servers):
+
+**Per-user install (no sudo):**
+```bash
+FPM_INSTALL_DIR=~/.local/bin curl ... | bash --yes
+```
+
+**System-wide install (admin):**
+```bash
+sudo FPM_INSTALL_DIR=/usr/local/bin curl ... | bash --yes
+```
+
+### Docker / CI
 
 ```bash
-fpm version
-# fpm 0.1.0
+# Minimal one-liner for Dockerfiles
+RUN curl -fsSL https://raw.githubusercontent.com/Kartikey2011yadav/fpm/main/install-simple.sh | sh
 
-fpm --help
+# Or copy from the official image (faster, no network)
+COPY --from=ghcr.io/kartikey2011yadav/fpm:latest /fpm /usr/local/bin/fpm
 ```
 
-## Updating
+### VPN / Corporate Proxy
+
+If TLS verification fails during install (VPN intercepting HTTPS):
 
 ```bash
-fpm self update
+# After install, configure fpm for VPN:
+export FPM_ALLOW_INSECURE_HOST=pypi.org,files.pythonhosted.org
 ```
 
-## Uninstalling
+---
+
+## Verifying Installation
+
+```bash
+fpm -v                # Print version
+fpm repair            # Check all directories and configuration
+fpm config show       # Display all paths and settings
+```
+
+---
+
+## Uninstallation
 
 ```bash
 # Remove binary
 rm $(which fpm)
 
-# Remove data (optional)
-rm -rf ~/.cache/fpm ~/.local/share/fpm ~/.config/fpm
+# Remove all data (cache, config, tools, managed Pythons)
+rm -rf ~/.cache/fpm
+rm -rf ~/.local/share/fpm
+rm -rf ~/.config/fpm
+
+# Remove PATH entry from shell profile (if added)
+# Edit ~/.bashrc or ~/.zshrc and remove the fpm line
+```
+
+---
+
+## Updating
+
+```bash
+# Self-update (downloads latest release)
+fpm self update
+
+# Or re-run installer
+curl -fsSL https://raw.githubusercontent.com/Kartikey2011yadav/fpm/main/install.sh | bash --yes
+
+# Or via package manager
+brew upgrade fpm               # Homebrew
+pip install --upgrade fpm-pkg  # pip
+go install .../cmd/fpm@latest  # Go
+```
+
+---
+
+## Release Workflow (for maintainers)
+
+### Publishing a New Release
+
+```bash
+# 1. Ensure clean state
+git status  # should be clean
+
+# 2. Run release script
+./scripts/release.sh 0.2.0
+
+# 3. Push tag (triggers all CI)
+git push origin v0.2.0
+```
+
+This triggers automatically:
+- **GoReleaser** — builds binaries for all platforms, creates GitHub release
+- **Docker workflow** — builds + pushes multi-arch image to ghcr.io
+- **PyPI workflow** — publishes fpm-pkg with updated version
+- **Homebrew workflow** — updates tap formula with SHA256 checksums
+
+### Setting Up CI Secrets
+
+| Secret | Purpose | Where to get |
+|--------|---------|--------------|
+| `GITHUB_TOKEN` | Auto-provided by GitHub Actions | Automatic |
+| `TAP_GITHUB_TOKEN` | Push to homebrew-tap repo | GitHub Settings → PAT (repo scope) |
+| PyPI trusted publisher | Publish to PyPI | PyPI Settings → Add publisher |
+
+### Creating the Homebrew Tap (one-time)
+
+```bash
+# 1. Create repo: github.com/Kartikey2011yadav/homebrew-tap
+# 2. Add Formula directory with initial formula:
+mkdir homebrew-tap && cd homebrew-tap
+git init
+mkdir Formula
+cp /path/to/fpm/homebrew/fpm.rb Formula/
+git add . && git commit -m "Initial fpm formula"
+git remote add origin https://github.com/Kartikey2011yadav/homebrew-tap.git
+git push -u origin main
+
+# 3. Add TAP_GITHUB_TOKEN secret to fpm repo:
+#    GitHub → fpm repo → Settings → Secrets → New → TAP_GITHUB_TOKEN
+```
+
+### Setting Up PyPI (one-time)
+
+1. Go to https://pypi.org → Account → Publishing → Add new pending publisher
+2. Fill in:
+   - Project name: `fpm-pkg`
+   - Owner: `Kartikey2011yadav`
+   - Repository: `fpm`
+   - Workflow: `pypi.yml`
+3. First release publish will claim the project name
+
+---
+
+## Troubleshooting
+
+### "Permission denied" during install
+
+```bash
+# Use per-user install (no sudo needed)
+FPM_INSTALL_DIR=~/.local/bin curl ... | bash --yes
+```
+
+### "command not found" after install
+
+Your shell doesn't see `~/.local/bin`. Add to PATH:
+
+```bash
+# bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc
+
+# zsh
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
+
+# fish
+echo 'set -gx PATH "$HOME/.local/bin" $PATH' >> ~/.config/fish/config.fish
+```
+
+### pip install fails with "not found"
+
+The package `fpm-pkg` needs to be published to PyPI first (happens on first release).
+Until then, use the install script or `go install`.
+
+### Docker image not found
+
+Published on first release. Until then, build locally:
+```bash
+docker build -t fpm:local .
+docker run --rm fpm:local --version
 ```
