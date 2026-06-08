@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/kartikeyyadav/fpm/internal/cache"
 	"github.com/kartikeyyadav/fpm/internal/client"
@@ -113,7 +114,8 @@ func runInstall(cmd *cobra.Command, args []string) error {
 
 	_ = targetBinDir
 
-	fmt.Printf("\033[1m⠋ Resolving %d package(s)...\033[0m\n\n", len(requirements))
+	resolveStart := time.Now()
+	fmt.Printf("\033[1m  Resolving %d package(s)...\033[0m", len(requirements))
 
 	// Resolve dependencies
 	networkCfg := cfg.Network
@@ -133,11 +135,15 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		Immutables: cfg.Immutable.Packages,
 	}).Resolve(requirements)
 	if err != nil {
+		fmt.Println()
 		return wrapResolutionError(err, args)
 	}
 
+	resolveElapsed := time.Since(resolveStart)
+	fmt.Printf(" \033[32mdone\033[0m \033[2m(%dms)\033[0m\n", resolveElapsed.Milliseconds())
+
 	if len(res.Packages) == 0 {
-		fmt.Println("Nothing to install (no packages resolved).")
+		fmt.Println("  Nothing to install (no packages resolved).")
 		return nil
 	}
 
@@ -173,9 +179,11 @@ func runInstall(cmd *cobra.Command, args []string) error {
 
 	ctx := context.Background()
 	installed := 0
+	startTime := time.Now()
+
+	fmt.Println()
 	for _, pkg := range res.Packages {
 		if pkg.URL == "" {
-			fmt.Printf("  %s %s — resolved (no wheel URL available)\n", pkg.Name.Raw(), pkg.Version.String())
 			continue
 		}
 
@@ -184,27 +192,33 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		wheelPath := filepath.Join(pkgCache.WheelsDir(), wheelFilename)
 
 		if _, err := os.Stat(wheelPath); err != nil {
-			fmt.Printf("  \033[34m↓\033[0m \033[1m%s\033[0m \033[2m%s\033[0m\n", pkg.Name.Raw(), pkg.Version.String())
+			// Download needed — show progress
+			dlStart := time.Now()
+			fmt.Printf("  \033[34m↓\033[0m \033[1m%-25s\033[0m \033[2m%s\033[0m", pkg.Name.Raw(), pkg.Version.String())
 			dlFile := client.SimpleFile{URL: pkg.URL, Filename: wheelFilename}
 			if err := pypiClient.DownloadWheel(ctx, dlFile, wheelPath); err != nil {
-				fmt.Fprintf(os.Stderr, "  \033[31m✗\033[0m %s: %v\n", pkg.Name.Raw(), err)
+				fmt.Printf(" \033[31m✗ failed\033[0m\n")
+				fmt.Fprintf(os.Stderr, "    %v\n", err)
 				continue
 			}
+			elapsed := time.Since(dlStart)
+			fmt.Printf(" \033[32m✓\033[0m \033[2m%dms\033[0m\n", elapsed.Milliseconds())
 		} else {
-			fmt.Printf("  \033[33m●\033[0m \033[1m%s\033[0m \033[2m%s (cached)\033[0m\n", pkg.Name.Raw(), pkg.Version.String())
+			// Already cached
+			fmt.Printf("  \033[32m✓\033[0m \033[1m%-25s\033[0m \033[36m%s\033[0m \033[2m(cached)\033[0m\n", pkg.Name.Raw(), pkg.Version.String())
 		}
 
 		// Store in CAS
 		casKey, err := pkgCache.Store(wheelPath)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "  error caching %s: %v\n", pkg.Name.Raw(), err)
+			fmt.Fprintf(os.Stderr, "    error caching %s: %v\n", pkg.Name.Raw(), err)
 			continue
 		}
 
 		// Link to site-packages
 		casPath, _ := pkgCache.Retrieve(casKey)
 		if err := fs.LinkDir(casPath, targetSitePackages, fs.LinkModeAuto); err != nil {
-			fmt.Fprintf(os.Stderr, "  error installing %s: %v\n", pkg.Name.Raw(), err)
+			fmt.Fprintf(os.Stderr, "    error installing %s: %v\n", pkg.Name.Raw(), err)
 			continue
 		}
 
@@ -227,8 +241,9 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		// Track reference
 		refTracker.AddReference(envPath, casKey, pkg.Name.Normalized(), pkg.Version.String())
 		installed++
-		fmt.Printf("  \033[32m✓\033[0m \033[1m%s\033[0m \033[36m%s\033[0m\n", pkg.Name.Raw(), pkg.Version.String())
 	}
+
+	totalTime := time.Since(startTime)
 
 	// Update pyproject.toml and lockfile only when in a project (not global installs)
 	if activeVenv != nil && !flagSystem {
@@ -244,7 +259,7 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		lf.Write(filepath.Join(cwd, lock.LockFileName))
 	}
 
-	fmt.Printf("\n\033[32m🚀 Done: %d package(s) installed.\033[0m\n", installed)
+	fmt.Printf("\n  \033[32m✓ Installed %d package(s)\033[0m \033[2min %dms\033[0m\n", installed, totalTime.Milliseconds())
 	return nil
 }
 
