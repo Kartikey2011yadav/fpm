@@ -41,13 +41,26 @@ var configSetCmd = &cobra.Command{
   fpm config set cache.dir /tmp/fpm-cache
 
   # Change concurrency
-  fpm config set tool.concurrency 100`,
+  fpm config set tool.concurrency 100
+
+  # Enable debug logging
+  fpm config set log.level debug
+
+  # Set log file path
+  fpm config set log.file /tmp/fpm-debug.log`,
 	RunE: nil, // set in repair_impl.go
+}
+
+var configInitCmd = &cobra.Command{
+	Use:   "init",
+	Short: "Create a default user configuration file",
+	RunE:  nil, // set in repair_impl.go
 }
 
 func init() {
 	configCmd.AddCommand(configShowCmd)
 	configCmd.AddCommand(configSetCmd)
+	configCmd.AddCommand(configInitCmd)
 	rootCmd.AddCommand(repairCmd)
 	rootCmd.AddCommand(configCmd)
 }

@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"github.com/kartikeyyadav/fpm/internal/config"
+	fpmlog "github.com/kartikeyyadav/fpm/internal/log"
 	"github.com/spf13/cobra"
 )
 
@@ -12,6 +14,7 @@ var (
 	flagJSON              bool
 	flagSystem            bool
 	flagAllowInsecureHost []string
+	flagLogLevel          string
 )
 
 var rootCmd = &cobra.Command{
@@ -37,6 +40,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&flagJSON, "json", false, "Output in JSON format")
 	rootCmd.PersistentFlags().BoolVarP(&flagSystem, "system", "s", false, "Install into system Python instead of virtual environment")
 	rootCmd.PersistentFlags().StringSliceVar(&flagAllowInsecureHost, "allow-insecure-host", nil, "Skip TLS verification for specific hosts")
+	rootCmd.PersistentFlags().StringVar(&flagLogLevel, "log-level", "", "Log level: debug, info, warn, error, off")
 
 	rootCmd.AddGroup(
 		&cobra.Group{ID: "package", Title: "Package Management:"},
@@ -46,12 +50,31 @@ func init() {
 	)
 }
 
+func init() {
+	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		cfg, _ := config.LoadFromCwd()
+		logLevel := cfg.Log.Level
+		logFile := cfg.Log.File
+		if flagLogLevel != "" {
+			logLevel = flagLogLevel
+		}
+		if logLevel != "" && logLevel != "off" {
+			if logFile == "" {
+				logFile = config.DefaultLogFile()
+			}
+			fpmlog.Init(logLevel, logFile)
+		}
+		return nil
+	}
+}
+
 func Execute() error {
 	rootCmd.Version = Version
 	rootCmd.SetVersionTemplate("fpm {{.Version}}\n")
 	rootCmd.Flags().BoolP("version", "v", false, "Print version information")
 
 	err := rootCmd.Execute()
+	fpmlog.Close()
 	if err != nil {
 		formatError(err)
 	}

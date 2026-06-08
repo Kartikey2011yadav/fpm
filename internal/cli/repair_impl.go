@@ -18,6 +18,7 @@ func init() {
 	repairCmd.RunE = runRepair
 	configShowCmd.RunE = runConfigShow
 	configSetCmd.RunE = runConfigSet
+	configInitCmd.RunE = runConfigInit
 }
 
 func runRepair(cmd *cobra.Command, args []string) error {
@@ -163,6 +164,18 @@ func runConfigShow(cmd *cobra.Command, args []string) error {
 	fmt.Printf("    link-mode:             %s\n", cfg.Tool.LinkMode)
 	fmt.Printf("    cross-manager-policy:  %s\n", cfg.Tool.CrossManagerPolicy)
 
+	fmt.Println("\n  Logging:")
+	logLevel := cfg.Log.Level
+	if logLevel == "" {
+		logLevel = "off"
+	}
+	logFile := cfg.Log.File
+	if logFile == "" {
+		logFile = "(default: " + config.DefaultLogFile() + ")"
+	}
+	fmt.Printf("    level:  %s\n", logLevel)
+	fmt.Printf("    file:   %s\n", logFile)
+
 	fmt.Println("\n  Indexes:")
 	for _, idx := range cfg.Indexes {
 		def := ""
@@ -234,6 +247,49 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	return nil
+}
+
+func runConfigInit(cmd *cobra.Command, args []string) error {
+	userCfgPath := filepath.Join(config.ConfigDir(), "config.toml")
+
+	if _, err := os.Stat(userCfgPath); err == nil {
+		return fmt.Errorf("config file already exists: %s\nUse 'fpm config set' to modify values", userCfgPath)
+	}
+
+	os.MkdirAll(filepath.Dir(userCfgPath), 0755)
+
+	defaultContent := `# fpm user configuration
+# This file is loaded for all projects. Project-level fpm.toml takes priority.
+# See: fpm config show
+
+[tool]
+# cross-manager-policy = "ask"  # ask | install | skip
+# link-mode = "auto"            # auto | hardlink | copy
+# concurrency = 50
+
+[python]
+# version = "3.12"
+# preference = "managed"        # managed | system | only-managed
+
+[network]
+# allow-insecure-host = []
+# system-certs = false
+
+[log]
+# level = "off"                 # debug | info | warn | error | off
+# file = ""                     # empty = default (~/.local/share/fpm/logs/fpm.log)
+
+# [cache]
+# dir = ""                      # override cache directory
+`
+
+	if err := os.WriteFile(userCfgPath, []byte(defaultContent), 0644); err != nil {
+		return fmt.Errorf("failed to create config: %w", err)
+	}
+
+	fmt.Printf("Created user config: %s\n", userCfgPath)
+	fmt.Println("Edit this file to customize fpm behavior globally.")
 	return nil
 }
 

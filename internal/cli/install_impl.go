@@ -10,6 +10,7 @@ import (
 	"github.com/kartikeyyadav/fpm/internal/cache"
 	"github.com/kartikeyyadav/fpm/internal/client"
 	"github.com/kartikeyyadav/fpm/internal/config"
+	fpmlog "github.com/kartikeyyadav/fpm/internal/log"
 	"github.com/kartikeyyadav/fpm/internal/env"
 	"github.com/kartikeyyadav/fpm/internal/fs"
 	"github.com/kartikeyyadav/fpm/internal/lock"
@@ -44,6 +45,11 @@ func runInstall(cmd *cobra.Command, args []string) error {
 
 	if len(requirements) == 0 {
 		return fmt.Errorf("no packages specified")
+	}
+
+	fpmlog.Info("install: %d package(s) requested", len(requirements))
+	for _, r := range requirements {
+		fpmlog.Debug("  requirement: %s", r.Name.Raw())
 	}
 
 	// Determine target: venv (local) or system (global)

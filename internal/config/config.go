@@ -16,6 +16,7 @@ type Config struct {
 	Cache     CacheConfig     `toml:"cache"`
 	Indexes   []IndexConfig   `toml:"index"`
 	Network   NetworkConfig   `toml:"network"`
+	Log       LogConfig       `toml:"log"`
 }
 
 type ProjectConfig struct {
@@ -62,6 +63,19 @@ type NetworkConfig struct {
 	SystemCerts       bool     `toml:"system-certs"`
 	ClientCert        string   `toml:"client-cert"`
 	ClientKey         string   `toml:"client-key"`
+}
+
+type LogConfig struct {
+	Level string `toml:"level"` // "debug", "info", "warn", "error", "off"
+	File  string `toml:"file"`  // path to log file (empty = no file logging)
+}
+
+func LogDir() string {
+	return filepath.Join(DataDir(), "logs")
+}
+
+func DefaultLogFile() string {
+	return filepath.Join(LogDir(), "fpm.log")
 }
 
 func DefaultConfig() *Config {
