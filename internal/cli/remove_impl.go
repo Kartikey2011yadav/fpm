@@ -17,6 +17,61 @@ import (
 
 func init() {
 	removeCmd.RunE = runRemove
+	autoremoveCmd.RunE = runAutoremove
+}
+
+func runAutoremove(cmd *cobra.Command, args []string) error {
+	cwd, _ := os.Getwd()
+
+	var targetSitePackages string
+	activeVenv, _ := venv.Detect(cwd)
+
+	if activeVenv != nil && !flagSystem {
+		targetSitePackages = activeVenv.SitePackages
+	} else if flagSystem {
+		finder := python.NewFinder()
+		interp, err := finder.FindBest("")
+		if err != nil {
+			return fmt.Errorf("no Python found")
+		}
+		targetSitePackages = interp.SitePackages
+		if targetSitePackages == "" {
+			for _, p := range interp.SysPaths {
+				if strings.Contains(p, "site-packages") || strings.Contains(p, "dist-packages") {
+					targetSitePackages = p
+					break
+				}
+			}
+		}
+	} else {
+		return fmt.Errorf("no virtual environment found. Use --system to check system packages")
+	}
+
+	orphans := findOrphanDeps(targetSitePackages, nil)
+	if len(orphans) == 0 {
+		fmt.Println("  No orphaned packages found.")
+		return nil
+	}
+
+	fmt.Printf("  Found %d orphaned package(s):\n\n", len(orphans))
+	for _, name := range orphans {
+		fmt.Printf("    \033[2m-\033[0m %s\n", name)
+	}
+
+	fmt.Printf("\n  Removing %d package(s)...\n", len(orphans))
+	removed := 0
+	for _, name := range orphans {
+		pkgName := types.NewPackageName(name)
+		if err := uninstallPackage(targetSitePackages, pkgName); err != nil {
+			fmt.Printf("  \033[31m✗\033[0m %s: %v\n", name, err)
+			continue
+		}
+		fmt.Printf("  \033[32m✓\033[0m Removed %s\n", name)
+		removed++
+	}
+
+	fmt.Printf("\n  %d package(s) removed.\n", removed)
+	return nil
 }
 
 func runRemove(cmd *cobra.Command, args []string) error {

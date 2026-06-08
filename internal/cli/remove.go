@@ -27,7 +27,22 @@ by the removed package.`,
 	RunE:    nil, // implemented in remove_impl.go
 }
 
+var autoremoveCmd = &cobra.Command{
+	Use:   "autoremove",
+	Short: "Remove packages not required by any other package",
+	Long: `Find and remove orphaned dependencies — packages that were installed
+as dependencies but are no longer needed by any other package.`,
+	Example: `  # See and remove orphans from system
+  fpm autoremove --system
+
+  # In a project (venv)
+  fpm autoremove`,
+	GroupID: "package",
+	RunE:    nil, // set in remove_impl.go
+}
+
 func init() {
 	removeCmd.Flags().Bool("purge", false, "Also remove unused dependencies")
 	rootCmd.AddCommand(removeCmd)
+	rootCmd.AddCommand(autoremoveCmd)
 }
