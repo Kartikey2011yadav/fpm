@@ -141,6 +141,33 @@ func (g *Graph) Orphans() []string {
 	return orphans
 }
 
+// SyncFromInstalled ensures all fpm-installed packages are in the graph.
+// Packages found on disk but not in the graph are added as "requested"
+// (safe default for pre-existing packages).
+func (g *Graph) SyncFromInstalled(fpmPackages []InstalledPkg) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	for _, pkg := range fpmPackages {
+		if _, exists := g.Packages[pkg.Name]; !exists {
+			g.Packages[pkg.Name] = &PackageNode{
+				Name:         pkg.Name,
+				Version:      pkg.Version,
+				Requested:    true, // safe default: treat pre-existing as requested
+				Dependencies: pkg.Dependencies,
+				InstalledAt:  "pre-existing",
+			}
+		}
+	}
+}
+
+// InstalledPkg is a minimal struct for syncing from disk.
+type InstalledPkg struct {
+	Name         string
+	Version      string
+	Dependencies []string
+}
+
 // DependentsOf returns packages that depend on the given package.
 func (g *Graph) DependentsOf(name string) []string {
 	g.mu.RLock()

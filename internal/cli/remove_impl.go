@@ -244,17 +244,46 @@ func excludePackages(packages []string) []string {
 		}
 	}
 
+	// Also keep dependencies of kept packages
+	// (if user keeps jinja2, also keep markupsafe)
+	envPath := "global"
+	activeVenv, _ := venv.Detect("")
+	if activeVenv != nil && !flagSystem {
+		envPath = activeVenv.Path
+	}
+	graph := depgraph.Load(envPath)
+
+	// Transitively find all deps of kept packages
+	for name := range keepSet {
+		addTransitiveDeps(graph, name, keepSet)
+	}
+
 	var result []string
 	for _, pkg := range packages {
-		if !keepSet[strings.ToLower(pkg)] {
+		norm := strings.ToLower(pkg)
+		if !keepSet[norm] {
 			result = append(result, pkg)
 		}
 	}
 
-	if len(keepSet) > 0 {
-		fmt.Printf("  Keeping %d package(s), removing %d.\n", len(keepSet), len(result))
+	kept := len(packages) - len(result)
+	if kept > 0 {
+		fmt.Printf("  Keeping %d package(s) (+ their deps), removing %d.\n", kept, len(result))
 	}
 	return result
+}
+
+func addTransitiveDeps(graph *depgraph.Graph, name string, keepSet map[string]bool) {
+	node, exists := graph.Packages[name]
+	if !exists {
+		return
+	}
+	for _, dep := range node.Dependencies {
+		if !keepSet[dep] {
+			keepSet[dep] = true
+			addTransitiveDeps(graph, dep, keepSet)
+		}
+	}
 }
 
 func isInteractive() bool {

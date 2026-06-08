@@ -63,7 +63,7 @@ run_cmd() {
 }
 
 # Available test groups
-ALL_GROUPS="cli install list pip errors audit config project tree snapshot remove python venv cache crossmanager immutable version"
+ALL_GROUPS="cli install list pip errors audit config project tree snapshot remove python venv cache crossmanager immutable depgraph version"
 
 show_help() {
     echo "fpm Feature Test Suite"
@@ -98,6 +98,7 @@ show_list() {
     echo "  cache        Cache management"
     echo "  crossmanager Cross-manager conflict detection"
     echo "  immutable    Immutable package pinning"
+    echo "  depgraph     Dependency graph, mark, tree --system"
     echo "  version      Version flag variations"
     exit 0
 }
@@ -365,6 +366,30 @@ TOML
 
     # Error has actionable hint
     echo "$ERR" | grep -q "hint:\|fpm.toml" && pass "error references fpm.toml" || pass "error is clear (no hint needed)"
+fi
+
+if should_run "depgraph"; then
+    section "Dependency Graph & Mark"
+    fpm install -s flask requests >/dev/null 2>&1
+
+    # Mark command shows status
+    fpm mark --show flask | grep -q "requested" && pass "mark --show (requested)" || fail "mark show"
+    fpm mark --show urllib3 | grep -q "dependency" && pass "mark --show (dependency)" || fail "mark show dep"
+
+    # Change mark
+    fpm mark --dependency flask >/dev/null 2>&1
+    fpm mark --show flask | grep -q "dependency" && pass "mark --dependency" || fail "mark dep"
+    fpm mark --requested flask >/dev/null 2>&1
+    fpm mark --show flask | grep -q "requested" && pass "mark --requested" || fail "mark req"
+
+    # Tree --system uses graph
+    TREE=$(fpm tree --system 2>&1)
+    echo "$TREE" | grep -q "flask" && pass "tree --system shows packages" || fail "tree system"
+    echo "$TREE" | grep -q "urllib3\|jinja2\|click" && pass "tree --system shows deps" || fail "tree deps"
+
+    # Clean up
+    fpm remove -sp flask >/dev/null 2>&1
+    fpm remove -sp requests >/dev/null 2>&1
 fi
 
 if should_run "version"; then
