@@ -268,8 +268,8 @@ if should_run "remove"; then
     fpm remove click >/dev/null 2>&1 && pass "fpm remove (venv)" || fail "fpm remove"
     fpm uninstall flask >/dev/null 2>&1 && pass "fpm uninstall alias" || fail "uninstall alias"
 
-    # Autoremove cleans orphans
-    ORPHANS=$(fpm autoremove 2>&1)
+    # Autoremove cleans orphans (pipe 'a' to confirm)
+    ORPHANS=$(echo "a" | fpm autoremove 2>&1)
     echo "$ORPHANS" | grep -q "Removed\|No orphaned" && pass "fpm autoremove (venv)" || fail "autoremove"
 
     # System remove
@@ -284,9 +284,9 @@ if should_run "remove"; then
     docker exec fpm-test pip install six --trusted-host pypi.org --trusted-host files.pythonhosted.org -q 2>/dev/null || pip install six -q 2>/dev/null || true
     fpm remove -fs six >/dev/null 2>&1 && pass "combined -fs shorthand" || pass "-fs skipped (six not available)"
 
-    # --purge
+    # --purge (pipe 'a' to confirm removal)
     fpm install -s requests >/dev/null 2>&1
-    PURGE=$(fpm remove -s requests --purge 2>&1)
+    PURGE=$(echo "a" | fpm remove -s requests --purge 2>&1)
     echo "$PURGE" | grep -q "unused dependency\|Removed" && pass "remove --purge cleans deps" || fail "purge"
 fi
 
