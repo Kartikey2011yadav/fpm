@@ -44,3 +44,4 @@ dist/
 # Node (prettier dev tooling)
 node_modules/
 package-lock.json
+pip-package/fpm_pkg/__pycache__/
