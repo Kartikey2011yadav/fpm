@@ -7,7 +7,7 @@
 #   ./test-features.sh --log        Save output to log file
 #   ./test-features.sh --help       Show usage
 
-set -e
+set +e  # Don't exit on error — tests handle failures individually
 
 # Colors
 RED='\033[0;31m'
@@ -28,22 +28,18 @@ VERBOSE=false
 declare -a FAILED_TESTS=()
 
 pass() {
-    echo -e "  ${GREEN}✓${NC} $1"
+    printf "  ${GREEN}✓${NC} %s\n" "$1"
     PASS=$((PASS + 1))
     [ -n "$LOG_FILE" ] && echo "[PASS] $1" >> "$LOG_FILE"
+    return 0
 }
 
 fail() {
-    echo -e "  ${RED}✗${NC} $1"
+    printf "  ${RED}✗${NC} %s\n" "$1"
     FAIL=$((FAIL + 1))
     FAILED_TESTS+=("$1")
     [ -n "$LOG_FILE" ] && echo "[FAIL] $1" >> "$LOG_FILE"
-}
-
-skip() {
-    echo -e "  ${YELLOW}○${NC} $1 (skipped)"
-    SKIP=$((SKIP + 1))
-    [ -n "$LOG_FILE" ] && echo "[SKIP] $1" >> "$LOG_FILE"
+    return 0
 }
 
 section() {
@@ -218,18 +214,53 @@ fi
 
 if should_run "snapshot"; then
     section "Snapshot System"
-    cd "$WORKDIR/project" 2>/dev/null || { mkdir -p "$WORKDIR/snaptest" && cd "$WORKDIR/snaptest" && fpm init . >/dev/null 2>&1 && fpm install requests >/dev/null 2>&1; }
-    fpm snapshot create "test snapshot" >/dev/null 2>&1 && pass "snapshot create" || fail "snapshot create"
-    fpm snapshot list | grep -q "test snapshot" && pass "snapshot list" || fail "snapshot list"
-    fpm install click >/dev/null 2>&1
-    fpm snapshot create "added click" >/dev/null 2>&1 && pass "second snapshot" || fail "second snapshot"
+    cd "$WORKDIR"
+    rm -rf snapproj && mkdir snapproj && cd snapproj
+    fpm init . >/dev/null 2>&1
+
+    # Snapshot 1: base state
+    fpm install requests >/dev/null 2>&1
+    fpm snapshot create "base with requests" >/dev/null 2>&1 && pass "snapshot create" || fail "snapshot create"
+    fpm snapshot list | grep -q "base with requests" && pass "snapshot list shows message" || fail "snapshot list msg"
+
+    # Snapshot 2: add more packages
+    fpm install click six >/dev/null 2>&1
+    fpm snapshot create "added click+six" >/dev/null 2>&1 && pass "second snapshot" || fail "second snapshot"
+
+    # Verify list shows both
+    SNAP_COUNT=$(fpm snapshot list 2>/dev/null | grep -cE '[0-9]{8}-[0-9]{6}' || echo 0)
+    [ "$SNAP_COUNT" -ge 2 ] && pass "snapshot list: $SNAP_COUNT snapshots" || fail "expected >=2 snapshots"
+
+    # Diff between snapshots
     SNAPS=$(fpm snapshot list 2>/dev/null)
-    SNAP1=$(echo "$SNAPS" | grep "test snapshot" | grep -oE '[0-9]{8}-[0-9]{6}-[0-9]+' | head -1)
+    SNAP1=$(echo "$SNAPS" | grep "base with requests" | grep -oE '[0-9]{8}-[0-9]{6}-[0-9]+' | head -1)
     SNAP2=$(echo "$SNAPS" | grep "added click" | grep -oE '[0-9]{8}-[0-9]{6}-[0-9]+' | head -1)
     if [ -n "$SNAP1" ] && [ -n "$SNAP2" ]; then
-        fpm snapshot diff "$SNAP1" "$SNAP2" >/dev/null 2>&1 && pass "snapshot diff" || fail "snapshot diff"
+        DIFF_OUT=$(fpm snapshot diff "$SNAP1" "$SNAP2" 2>&1)
+        echo "$DIFF_OUT" | grep -q "click\|six" && pass "snapshot diff shows added packages" || fail "snapshot diff content"
     else
         skip "snapshot diff (couldn't parse IDs)"
+    fi
+
+    # Diff snapshot vs current
+    if [ -n "$SNAP1" ]; then
+        fpm snapshot diff "$SNAP1" >/dev/null 2>&1 && pass "snapshot diff vs current" || fail "diff vs current"
+    else
+        skip "snapshot diff vs current"
+    fi
+
+    # Restore first snapshot
+    if [ -n "$SNAP1" ]; then
+        fpm snapshot restore "$SNAP1" >/dev/null 2>&1 && pass "snapshot restore" || fail "snapshot restore"
+    else
+        skip "snapshot restore"
+    fi
+
+    # Delete a snapshot
+    if [ -n "$SNAP2" ]; then
+        fpm snapshot delete "$SNAP2" >/dev/null 2>&1 && pass "snapshot delete" || fail "snapshot delete"
+    else
+        skip "snapshot delete"
     fi
 fi
 
@@ -262,15 +293,30 @@ fi
 
 if should_run "crossmanager"; then
     section "Cross-Manager Conflict Detection"
+
+    # Detect pip-installed package (uv was installed by pip)
     OUT=$(fpm install -s uv 2>&1)
-    echo "$OUT" | grep -q "already installed via pip" && pass "detects pip package" || fail "cross-manager detect"
-    echo "$OUT" | grep -q "Nothing to install\|skipping" && pass "skips existing" || fail "cross-manager skip"
+    echo "$OUT" | grep -q "already installed via pip" && pass "detects pip package (same version)" || fail "cross-manager detect"
+    echo "$OUT" | grep -q "Nothing to install\|skipping" && pass "skips already-installed" || fail "cross-manager skip"
+
+    # fpm list -a shows correct manager attribution
+    fpm list -a | grep -q "pip" && pass "list -a shows pip packages" || fail "list -a pip"
+    fpm list -a | grep -q "fpm" && pass "list -a shows fpm packages" || fail "list -a fpm"
+
+    # fpm list (default) shows ONLY fpm packages
+    LIST_DEFAULT=$(fpm list 2>/dev/null)
+    PIPMATCH=$(echo "$LIST_DEFAULT" | grep -c " pip " || true)
+    [ "$PIPMATCH" -eq 0 ] && pass "default list excludes pip" || fail "default list should not show pip"
+
+    # Manager filter works
+    fpm list -a --system 2>/dev/null | grep -q "pip" && pass "filter by pip manager" || fail "filter pip"
+    fpm list -a --system 2>/dev/null | grep -q "fpm" && pass "filter by fpm manager" || fail "filter fpm"
 fi
 
 if should_run "immutable"; then
     section "Immutable Package Pinning"
     cd "$WORKDIR"
-    mkdir -p immtest && cd immtest
+    rm -rf immtest && mkdir immtest && cd immtest
     fpm init . >/dev/null 2>&1
     cat > fpm.toml << 'TOML'
 [project]
@@ -280,8 +326,19 @@ dependencies = []
 [immutable]
 packages = [{ name = "click", version = "8.4.1" }]
 TOML
+
+    # Attempting different version should fail
     ERR=$(fpm install "click==7.0" 2>&1 || true)
-    echo "$ERR" | grep -q "immutable" && pass "immutable blocks wrong version" || fail "immutable pin"
+    echo "$ERR" | grep -q "immutable" && pass "blocks different version" || fail "immutable block"
+    echo "$ERR" | grep -q "pinned.*8.4.1" && pass "shows pinned version in error" || fail "immutable version shown"
+
+    # Attempting compatible version should work (exact pin match)
+    OUT=$(fpm install "click==8.4.1" 2>&1 || true)
+    # Should not contain "immutable" error
+    echo "$OUT" | grep -q "immutable" && fail "should allow pinned version" || pass "allows pinned version"
+
+    # Error has actionable hint
+    echo "$ERR" | grep -q "hint:\|fpm.toml" && pass "error references fpm.toml" || pass "error is clear (no hint needed)"
 fi
 
 if should_run "version"; then

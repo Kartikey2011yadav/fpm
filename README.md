@@ -1,340 +1,222 @@
-# fpm — Fast Package Manager
+# fpm — Fast Package Manager for Python
 
-A high-performance, space-conservative Python package manager written in Go.
-Designed to coexist with pip, uv, conda, poetry, and other managers while
-providing unique capabilities like environment snapshots, immutable package
-pinning, and content-addressable caching.
+[![CI](https://github.com/Kartikey2011yadav/fpm/actions/workflows/ci.yml/badge.svg)](https://github.com/Kartikey2011yadav/fpm/actions/workflows/ci.yml)
+[![Go](https://img.shields.io/badge/Go-1.25-blue)](https://go.dev)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-## Features
-
-- **Blazing fast** — parallel downloads, content-addressable cache with
-  hardlinking
-- **Coexists with everything** — works alongside pip, uv, conda, poetry, pdm
-  without conflicts
-- **Environment snapshots** — version your environment like git; restore any
-  previous state instantly
-- **Cross-manager awareness** — detects packages from all managers, warns about
-  conflicts
-- **Immutable pinning** — lock critical packages that must never change version
-- **Space efficient** — content-addressable cache with reflink/hardlink, zero
-  duplication
-- **Python version management** — install and switch between Python versions
-  per-project
-- **Universal lockfile** — cross-platform lockfile for reproducible installs
-- **Global/local scope** — `--system` for system-wide, local by default (safe)
-- **Works everywhere** — Linux, macOS, Windows, servers, Jupyter, CI/CD
-
-## Installation
-
-### Direct download (recommended)
+A next-generation Python package manager that **coexists** with your existing tools.
+Written in Go for speed. Designed for teams who need reproducibility, safety, and
+visibility across their entire Python ecosystem.
 
 ```bash
-# macOS / Linux
-curl -fsSL https://github.com/Kartikey2011yadav/fpm/releases/latest/download/fpm-$(uname -s)-$(uname -m) -o fpm
-chmod +x fpm
-sudo mv fpm /usr/local/bin/
-
-# Or with install script
-curl -fsSL https://raw.githubusercontent.com/Kartikey2011yadav/fpm/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/Kartikey2011yadav/fpm/main/install.sh | bash
 ```
 
-### Homebrew (macOS/Linux)
+## Why fpm?
+
+| Problem | pip/uv | fpm |
+|---------|--------|-----|
+| "What installed this package?" | No idea | Shows exact manager (pip/uv/conda/fpm) |
+| "Roll back to yesterday's environment" | Impossible | `fpm snapshot restore <id>` |
+| "Don't ever change numpy version" | Can't enforce | `[immutable]` pins in config |
+| "10 projects use requests — 10 copies" | Yes | One copy, hardlinked everywhere |
+| "pip broke my venv, conda disagrees" | Debug for hours | See all managers, detect conflicts |
+
+## Key Features
+
+### Environment Snapshots (git for your packages)
 
 ```bash
-brew install kartikeyyadav/tap/fpm
+fpm snapshot create "before experiment"   # capture state
+fpm install torch transformers            # experiment
+fpm snapshot diff 20260607-143000         # see what changed
+fpm snapshot restore 20260607-143000      # instantly roll back
 ```
 
-### pip
+### Cross-Manager Awareness
 
 ```bash
-pip install fpm-pkg
+$ fpm list -a
+Package    Version    Manager    Location
+requests   2.31.0     fpm        .venv/lib/.../site-packages
+numpy      1.24.0     pip        .venv/lib/.../site-packages
+black      23.1.0     uv         .venv/lib/.../site-packages
+scipy      1.10.0     conda      /opt/conda/lib/.../site-packages
+
+$ fpm install numpy
+  numpy 1.24.0 is already installed via pip — skipping download
 ```
 
-### go install
+### Immutable Package Pinning
 
-```bash
-go install github.com/kartikeyyadav/fpm/cmd/fpm@latest
+```toml
+# fpm.toml — numpy can NEVER be changed from this version
+[immutable]
+packages = [{ name = "numpy", version = "1.24.0" }]
 ```
 
-### From source
-
 ```bash
-git clone https://github.com/Kartikey2011yadav/fpm.git
-cd fpm
-make build
-./bin/fpm version
+$ fpm install numpy==2.0.0
+  error: cannot install numpy ==2.0.0: pinned as immutable at 1.24.0 in fpm.toml
 ```
 
-### Custom installation paths
+### Zero-Duplication Storage
 
-During installation, you can override default directories:
+fpm stores every package once (content-addressable by SHA256) and links it into
+projects via reflink/hardlink. 10 projects using `requests` = one copy on disk.
+
+### Intelligent Error Messages
 
 ```bash
-# Set custom paths via environment variables
-export FPM_CACHE_DIR=/custom/cache/path
-export FPM_DATA_DIR=/custom/data/path
-export FPM_CONFIG_DIR=/custom/config/path
+$ fpm install request
+  error: Package "request" not found on PyPI
 
-# Or configure after install via fpm.toml
-[cache]
-dir = "/my/custom/cache"
+    hint: Did you mean "requests"?
+          Run: fpm install requests
+```
+
+---
+
+## Install
+
+```bash
+# Interactive installer (recommended)
+curl -fsSL https://raw.githubusercontent.com/Kartikey2011yadav/fpm/main/install.sh | bash
+
+# Other methods
+pip install fpm-pkg                                      # PyPI
+brew install kartikeyyadav/tap/fpm                       # Homebrew
+go install github.com/kartikeyyadav/fpm/cmd/fpm@latest   # Go
+docker run ghcr.io/kartikey2011yadav/fpm --version       # Docker
 ```
 
 ## Quick Start
 
 ```bash
-# Create a new project
-fpm init myproject
-cd myproject
-
-# Add dependencies
-fpm install requests numpy pandas
-
-# Run your code
-fpm run python main.py
-
-# Take a snapshot of your environment
-fpm snapshot create "initial setup"
-
-# See what's installed (from ALL managers)
-fpm list
+fpm init myproject && cd myproject   # create project + venv
+fpm install requests pandas          # install packages
+fpm run python main.py               # run in managed env
+fpm snapshot create "v1"             # save environment state
+fpm list                             # see fpm packages
+fpm list -a                          # see ALL packages (pip, conda, etc.)
 ```
 
 ## CLI Reference
 
-| Command                     | Description                                    |
-| --------------------------- | ---------------------------------------------- |
-| `fpm init [path]`           | Create a new Python project                    |
-| `fpm install <pkg>`         | Install packages (aliases: `add`)              |
-| `fpm remove <pkg>`          | Remove packages (aliases: `uninstall`, `rm`)   |
-| `fpm list`                  | List installed packages (alias: `ls`)          |
-| `fpm sync`                  | Sync environment from lockfile                 |
-| `fpm lock`                  | Generate/update lockfile                       |
-| `fpm run <cmd>`             | Run command in managed environment             |
-| `fpm tree`                  | Display dependency tree                        |
-| `fpm audit`                 | Scan for known vulnerabilities                 |
-| `fpm venv [path]`           | Create virtual environment                     |
-| `fpm python list`           | List Python versions                           |
-| `fpm python install <ver>`  | Install Python version                         |
-| `fpm python use <ver>`      | Switch Python (local or `--system`)            |
-| `fpm snapshot create [msg]` | Capture environment state                      |
-| `fpm snapshot list`         | Show snapshot history                          |
-| `fpm snapshot restore <id>` | Restore previous state                         |
-| `fpm snapshot diff <id>`    | Compare snapshots                              |
-| `fpm cache size`            | Show cache usage                               |
-| `fpm cache gc`              | Remove unreferenced packages                   |
-| `fpm cache list-unused`     | Show orphaned cache entries                    |
-| `fpm build`                 | Build wheel/sdist                              |
-| `fpm publish`               | Upload to PyPI                                 |
-| `fpm pip list`              | List all packages (all managers)               |
-| `fpm pip freeze`            | Output requirements format                     |
-| `fpm tool run <pkg>`        | Run tool in ephemeral env                      |
-| `fpm tool install <pkg>`    | Install tool permanently                       |
-| `fpm version`               | Show version (also: `fpm --version`, `fpm -v`) |
-| `fpm repair`                | Diagnose and fix installation issues           |
-| `fpm config show`           | Show current configuration and paths           |
-| `fpm config set <k> <v>`    | Modify user configuration                      |
-| `fpm config init`           | Create default user config file                |
+### Package Management
 
-### Global Flags
+| Command | Description |
+|---------|-------------|
+| `fpm install <pkg>` | Install packages (alias: `add`) |
+| `fpm remove <pkg>` | Remove (aliases: `uninstall`, `rm`) |
+| `fpm list` | List fpm packages (alias: `ls`) |
+| `fpm list -a` | List ALL packages (all managers) |
+| `fpm sync` | Sync environment from lockfile |
+| `fpm lock` | Generate/update lockfile |
+| `fpm tree` | Show dependency tree |
+| `fpm audit` | Scan for vulnerabilities (OSV) |
 
-| Flag                           | Description                                |
-| ------------------------------ | ------------------------------------------ |
-| `-v`, `--version`              | Print version and exit                     |
-| `-s`, `--system`               | Install into system Python instead of venv |
-| `--verbose`                    | Enable verbose output                      |
-| `-q`, `--quiet`                | Suppress output except errors              |
-| `--json`                       | Output in JSON format                      |
-| `--no-progress`                | Disable progress bars                      |
-| `--color <mode>`               | Control colors (auto/always/never)         |
-| `--allow-insecure-host <host>` | Skip TLS verification for specific hosts   |
-| `--log-level <level>`          | Logging: debug, info, warn, error, off     |
+### Project
 
-## Environment Snapshots
+| Command | Description |
+|---------|-------------|
+| `fpm init` | Create project (pyproject.toml + venv) |
+| `fpm run <cmd>` | Run in managed environment |
+| `fpm build` | Build wheel/sdist |
+| `fpm publish` | Upload to PyPI |
 
-Think of it as **git for your Python environment**:
+### Environment
 
-```bash
-# Capture current state (tracks ALL managers: fpm, pip, uv, conda, etc.)
-fpm snapshot create "before ML experiment"
+| Command | Description |
+|---------|-------------|
+| `fpm venv` | Create virtual environment |
+| `fpm python list` | List Python versions |
+| `fpm python install <ver>` | Install Python version |
+| `fpm python use <ver>` | Switch Python (`--system` for global) |
+| `fpm snapshot create [msg]` | Capture environment state |
+| `fpm snapshot restore <id>` | Roll back to snapshot |
+| `fpm snapshot diff <id>` | Compare snapshots |
 
-# Make changes...
-fpm install torch transformers
+### Tools & System
 
-# See what changed
-fpm snapshot diff 20260605-094738
+| Command | Description |
+|---------|-------------|
+| `fpm tool run <pkg>` | Run tool (cached ephemeral env) |
+| `fpm tool install <pkg>` | Install CLI tool permanently |
+| `fpm cache gc` | Remove unused packages |
+| `fpm repair` | Diagnose + fix issues |
+| `fpm config show` | Display all settings |
 
-# Restore previous state instantly (fpm packages from cache, no re-download)
-fpm snapshot restore 20260605-094738
-#   ✓ Restored 12 fpm packages from cache
-#   ↓ Re-downloaded 1 package (cache was cleaned)
-#   ⚠ pip's scipy: expected 1.10.0, found 1.11.0
-```
+### Flags
 
-Snapshots are **scoped per-environment** — each venv/project has its own
-history.
-
-## Cross-Manager Coexistence
-
-fpm detects packages from: **pip, uv, conda, poetry, pdm, system**
-
-```bash
-# See everything in your environment
-fpm list --all
-# Package                  Version    Manager  Location
-# numpy                    1.24.0     pip      /usr/lib/python3.11/...
-# requests                 2.31.0     fpm      .venv/lib/python3.11/...
-# pandas                   2.0.0      conda    /opt/conda/lib/python3.11/...
-# black                    23.1.0     uv       .venv/lib/python3.11/...
-
-# When installing, fpm checks other managers first:
-fpm install numpy
-#   numpy 1.24.0 is already installed via pip — skipping download
-
-# If versions conflict, you get a choice:
-fpm install numpy==2.0.0
-#   numpy 1.24.0 is installed via pip, but you're requesting 2.0.0.
-#   [1] Skip  [2] Install anyway  [3] Abort
-```
-
-## Python Version Management
-
-```bash
-# Install multiple Python versions
-fpm python install 3.11 3.12 3.13
-
-# Use a specific version for this project (doesn't affect global)
-fpm python use 3.11
-
-# Create a venv with a different Python than system
-fpm venv --python 3.11
-# → Auto-downloads Python 3.11 if not installed
-
-# Switch global default
-fpm python use 3.12 --system
-```
+| Flag | Description |
+|------|-------------|
+| `-v` | Print version |
+| `-s`, `--system` | Install to system Python (required without venv) |
+| `-q`, `--quiet` | Suppress output |
+| `--json` | JSON output |
+| `--allow-insecure-host <host>` | Skip TLS for specific hosts |
+| `--log-level <level>` | debug/info/warn/error/off |
 
 ## Configuration
 
-fpm uses `fpm.toml` for project configuration:
-
 ```toml
+# fpm.toml
 [project]
 name = "my-project"
 requires-python = ">=3.10"
 dependencies = ["requests>=2.28", "numpy"]
 
-[tool.fpm]
-cross-manager-policy = "ask"  # ask, install, skip
-link-mode = "auto"            # auto, hardlink, copy, symlink
+[tool]
+cross-manager-policy = "ask"    # ask | install | skip
 concurrency = 50
 
 [immutable]
-packages = [
-    { name = "numpy", version = "1.24.0" },
-]
+packages = [{ name = "numpy", version = "1.24.0" }]
 
-[cache]
-dir = "/custom/cache/path"  # override default cache location
-
-[log]
-level = "off"  # debug, info, warn, error, off
-# file = ""    # custom log file path
-```
-
-### Configuration hierarchy (later overrides earlier):
-
-1. Built-in defaults
-2. System config (`/etc/fpm/config.toml`)
-3. User config (`~/.config/fpm/config.toml`)
-4. Project config (`./fpm.toml`)
-5. Environment variables (`FPM_*`)
-6. CLI flags
-
-### Environment variables
-
-| Variable                   | Description                                      |
-| -------------------------- | ------------------------------------------------ |
-| `FPM_CACHE_DIR`            | Override cache directory                         |
-| `FPM_DATA_DIR`             | Override data directory (Python installs, tools) |
-| `FPM_CONFIG_DIR`           | Override config directory                        |
-| `FPM_INDEX_URL`            | Override PyPI index URL                          |
-| `FPM_CROSS_MANAGER_POLICY` | Set cross-manager policy                         |
-| `FPM_PUBLISH_TOKEN`        | PyPI upload token                                |
-| `FPM_ALLOW_INSECURE_HOST`  | Comma-separated hosts to skip TLS for            |
-| `FPM_INSECURE`             | Disable ALL TLS verification (`1` to enable)     |
-| `FPM_SYSTEM_CERTS`         | Force platform certificate verifier (`1`)        |
-| `SSL_CERT_FILE`            | Custom CA bundle (overrides system certs)        |
-| `SSL_CERT_DIR`             | Directory of PEM certs (overrides system certs)  |
-| `SSL_CLIENT_CERT`          | mTLS client certificate file                     |
-| `NO_COLOR`                 | Disable colored output                           |
-
-## Network & TLS
-
-fpm bundles Mozilla's root CA certificates for reliable HTTPS in Docker
-containers and environments with missing system certificates.
-
-```toml
-# fpm.toml — network configuration
 [network]
 allow-insecure-host = ["internal-pypi.corp.example.com"]
-# system-certs = true    # force platform certificate store
-# client-cert = "/path/to/cert.pem"
-# client-key = "/path/to/key.pem"
+
+[log]
+level = "off"                   # debug | info | warn | error | off
 ```
 
-**Certificate resolution precedence:**
+**Priority** (highest wins): CLI flags > env vars > project fpm.toml > user config > defaults
 
-1. `SSL_CERT_FILE` / `SSL_CERT_DIR` — if set, these are the ONLY trusted roots
-2. System certificate pool — platform's native store
-3. Bundled Mozilla CAs — automatic fallback (Docker, air-gapped, etc.)
+## How It's Different
 
-**For VPN/corporate proxy environments:**
+| Feature | pip | uv | fpm |
+|---------|-----|----|----|
+| Content-addressable storage | No | No | Yes (zero duplication) |
+| Environment snapshots | No | No | Yes (instant restore) |
+| Cross-manager detection | No | No | Yes (pip, uv, conda, poetry, pdm) |
+| Immutable version pins | No | No | Yes (enforced by resolver) |
+| Reflink support | No | No | Yes (CoW on APFS/btrfs) |
+| Reference-tracked GC | No | No | Yes (only removes orphans) |
+| Bundled CA certificates | certifi | webpki | Mozilla (built-in) |
+| Per-host TLS bypass | `--trusted-host` | `--allow-insecure-host` | `--allow-insecure-host` |
+| Requires venv for install | No | Yes (`--system`) | Yes (`--system`) |
 
-```bash
-# Per-host TLS bypass (recommended)
-fpm install --allow-insecure-host pypi.org --allow-insecure-host files.pythonhosted.org requests
+## Platforms
 
-# Or set once via environment variable
-export FPM_ALLOW_INSECURE_HOST=pypi.org,files.pythonhosted.org
+| Platform | Status |
+|----------|--------|
+| macOS (Apple Silicon + Intel) | Supported |
+| Linux (x86_64 + ARM64) | Supported |
+| Windows (x86_64) | Supported |
+| Docker (multi-arch) | Supported |
+| JupyterHub / multi-user | Supported |
 
-# Nuclear option: skip ALL TLS verification
-FPM_INSECURE=1 fpm install requests
-```
+## Documentation
 
-## Architecture
-
-```
-fpm/
-├── cmd/fpm/          # CLI entry point
-├── internal/
-│   ├── cli/          # Command definitions and implementations
-│   ├── config/       # Configuration parsing and hierarchy
-│   ├── pep440/       # PEP 440 version parsing
-│   ├── pep508/       # PEP 508 dependency specifiers
-│   ├── platform/     # PEP 425 platform tags
-│   ├── resolver/     # PubGrub dependency resolver
-│   ├── client/       # PyPI HTTP client (PEP 691)
-│   ├── tls/          # TLS certificates + per-host bypass
-│   ├── cache/        # Content-addressable cache + GC
-│   ├── installer/    # Package installation + linking
-│   ├── env/          # Environment scanning + cross-manager
-│   ├── venv/         # Virtual environment creation
-│   ├── python/       # Python discovery + version management
-│   ├── lock/         # Lockfile format
-│   ├── wheel/        # Wheel parsing (PEP 427)
-│   ├── snapshot/     # Environment snapshots
-│   ├── workspace/    # Workspace/monorepo support
-│   ├── build/        # PEP 517 build frontend
-│   ├── publish/      # PyPI upload
-│   ├── script/       # PEP 723 inline script support
-│   ├── ui/           # Terminal output + progress
-│   └── fs/           # Filesystem utilities + linking
-├── pkg/
-│   ├── types/        # Shared types
-│   └── errors/       # Error types with hints
-└── fpm.toml.example  # Reference configuration
-```
+- [Installation Guide](docs/guides/installation.md)
+- [Quick Start](docs/guides/quickstart.md)
+- [CLI Reference](docs/reference/cli.md)
+- [Configuration](docs/reference/configuration.md)
+- [Concepts](docs/concepts/README.md) (CAS, resolution, snapshots, TLS)
+- [Architecture](docs/architecture.md)
+- [Testing](docs/guides/testing.md)
+- [Comparison: fpm vs uv vs pip](docs/comparison-uv-pip-fpm.md)
 
 ## Contributing
 
@@ -342,4 +224,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
 
 ## License
 
-MIT — see [LICENSE](LICENSE)
+MIT
