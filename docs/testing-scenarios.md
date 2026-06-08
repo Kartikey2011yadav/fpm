@@ -13,17 +13,22 @@ docker exec fpm-test bash /tmp/test-features.sh
 ## Setup
 
 ```bash
-# Fresh container with Python + uv + fpm
-docker run -d --name fpm-test python:3.12-slim sleep infinity
-docker exec fpm-test pip install uv --trusted-host pypi.org --trusted-host files.pythonhosted.org
+# Fresh container with env var baked in (important: -e flag, not .bashrc)
+docker run -d --name fpm-test \
+  -e FPM_ALLOW_INSECURE_HOST=pypi.org,files.pythonhosted.org,api.osv.dev \
+  python:3.12-slim sleep infinity
+
+# Install uv for cross-manager testing
+docker exec fpm-test pip install uv \
+  --trusted-host pypi.org --trusted-host files.pythonhosted.org
 
 # Build and copy fpm
 GOOS=linux GOARCH=amd64 go build -o bin/fpm-linux ./cmd/fpm
 docker cp bin/fpm-linux fpm-test:/usr/local/bin/fpm
-
-# Set TLS bypass for VPN environments
-docker exec fpm-test bash -c 'echo "export FPM_ALLOW_INSECURE_HOST=pypi.org,files.pythonhosted.org,api.osv.dev" >> ~/.bashrc'
 ```
+
+> **Note:** Use `docker run -e` for env vars, not `.bashrc`. Docker exec
+> runs a non-login shell that doesn't source `.bashrc`.
 
 ---
 

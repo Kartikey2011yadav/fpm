@@ -77,8 +77,12 @@ Docker container with Python + uv + fpm.
 ### Setup
 
 ```bash
-# Create container
-docker run -d --name fpm-test python:3.12-slim sleep infinity
+# Create container (env var via -e flag, NOT .bashrc)
+docker run -d --name fpm-test \
+  -e FPM_ALLOW_INSECURE_HOST=pypi.org,files.pythonhosted.org,api.osv.dev \
+  python:3.12-slim sleep infinity
+
+# Install uv for cross-manager testing
 docker exec fpm-test pip install uv \
     --trusted-host pypi.org --trusted-host files.pythonhosted.org
 
@@ -90,6 +94,10 @@ docker cp bin/fpm-linux fpm-test:/usr/local/bin/fpm
 docker cp scripts/test-features.sh fpm-test:/tmp/
 docker exec fpm-test bash /tmp/test-features.sh
 ```
+
+> **Important:** Always pass `FPM_ALLOW_INSECURE_HOST` via `docker run -e`,
+> not `.bashrc`. Docker exec uses a non-login shell that doesn't source
+> profile files.
 
 ### Running Tests
 

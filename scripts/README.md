@@ -21,8 +21,10 @@ fpm features end-to-end against a real Python environment.
 ### Quick Start
 
 ```bash
-# Setup container
-docker run -d --name fpm-test python:3.12-slim sleep infinity
+# Setup container (pass env var via -e, not .bashrc)
+docker run -d --name fpm-test \
+  -e FPM_ALLOW_INSECURE_HOST=pypi.org,files.pythonhosted.org,api.osv.dev \
+  python:3.12-slim sleep infinity
 docker exec fpm-test pip install uv --trusted-host pypi.org --trusted-host files.pythonhosted.org
 GOOS=linux GOARCH=amd64 go build -o bin/fpm-linux ./cmd/fpm
 docker cp bin/fpm-linux fpm-test:/usr/local/bin/fpm
@@ -31,6 +33,9 @@ docker cp bin/fpm-linux fpm-test:/usr/local/bin/fpm
 docker cp scripts/test-features.sh fpm-test:/tmp/
 docker exec fpm-test bash /tmp/test-features.sh
 ```
+
+> **Note:** `docker exec` doesn't source `.bashrc`. Env vars must be set via
+> `docker run -e` or passed inline: `docker exec -e VAR=val fpm-test ...`
 
 ### Options
 
