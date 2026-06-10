@@ -11,22 +11,24 @@
 
 # Fast Package Manager for Python
 
-**The package manager that sees everything, breaks nothing, and forgets nothing.**
+**The package manager that sees everything, breaks nothing, and forgets
+nothing.**
 
 [![CI](https://github.com/Kartikey2011yadav/fpm/actions/workflows/ci.yml/badge.svg)](https://github.com/Kartikey2011yadav/fpm/actions/workflows/ci.yml)
 [![Go](https://img.shields.io/badge/Go-1.25-blue)](https://go.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)]()
 
-[Install](#install) &bull; [Quick Start](#quick-start) &bull; [Documentation](docs/concepts/README.md) &bull; [Why fpm?](#why-fpm)
+[Install](#install) &bull; [Quick Start](#quick-start) &bull;
+[Documentation](docs/concepts/README.md) &bull; [Why fpm?](#why-fpm)
 
 </div>
 
 ---
 
-A next-generation Python package manager that **coexists** with your existing tools.
-Written in Go for speed. Designed for teams who need reproducibility, safety, and
-visibility across their entire Python ecosystem.
+A next-generation Python package manager that **coexists** with your existing
+tools. Written in Go for speed. Designed for teams who need reproducibility,
+safety, and visibility across their entire Python ecosystem.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Kartikey2011yadav/fpm/main/install.sh | bash
@@ -34,13 +36,13 @@ curl -fsSL https://raw.githubusercontent.com/Kartikey2011yadav/fpm/main/install.
 
 ## Why fpm?
 
-| Problem | pip/uv | fpm |
-|---------|--------|-----|
-| "What installed this package?" | No idea | Shows exact manager (pip/uv/conda/fpm) |
-| "Roll back to yesterday's environment" | Impossible | `fpm snapshot restore <id>` |
-| "Don't ever change numpy version" | Can't enforce | `[immutable]` pins in config |
-| "10 projects use requests — 10 copies" | Yes | One copy, hardlinked everywhere |
-| "pip broke my venv, conda disagrees" | Debug for hours | See all managers, detect conflicts |
+| Problem                                | pip/uv          | fpm                                    |
+| -------------------------------------- | --------------- | -------------------------------------- |
+| "What installed this package?"         | No idea         | Shows exact manager (pip/uv/conda/fpm) |
+| "Roll back to yesterday's environment" | Impossible      | `fpm snapshot restore <id>`            |
+| "Don't ever change numpy version"      | Can't enforce   | `[immutable]` pins in config           |
+| "10 projects use requests — 10 copies" | Yes             | One copy, hardlinked everywhere        |
+| "pip broke my venv, conda disagrees"   | Debug for hours | See all managers, detect conflicts     |
 
 ## Key Features
 
@@ -82,8 +84,8 @@ $ fpm install numpy==2.0.0
 
 ### Smart Dependency Management (like apt/pacman)
 
-fpm tracks which packages you asked for vs which came as dependencies.
-Only you decide what stays:
+fpm tracks which packages you asked for vs which came as dependencies. Only you
+decide what stays:
 
 ```bash
 $ fpm install -s flask            # flask = REQUESTED (protected)
@@ -140,65 +142,69 @@ fpm list                             # see fpm packages
 fpm list -a                          # see ALL packages (pip, conda, etc.)
 ```
 
+> **No activation needed.** fpm detects your project by directory — just `cd`
+> into it. Unlike pip, you never need `source .venv/bin/activate`. Leaving the
+> directory (`cd ..`) automatically deactivates the project environment.
+
 ## CLI Reference
 
 ### Package Management
 
-| Command | Description |
-|---------|-------------|
-| `fpm install <pkg>` | Install packages (alias: `add`) |
-| `fpm remove <pkg>` | Remove (aliases: `uninstall`, `rm`, flags: `-f` `-p`) |
-| `fpm autoremove` | Remove orphaned unused dependencies |
-| `fpm mark --show <pkg>` | Show if package is requested/dependency |
-| `fpm mark --requested <pkg>` | Protect package from autoremove |
-| `fpm list` | List fpm packages (alias: `ls`) |
-| `fpm list -a` | List ALL packages (all managers) |
-| `fpm sync` | Sync environment from lockfile |
-| `fpm lock` | Generate/update lockfile |
-| `fpm tree` | Show dependency tree |
-| `fpm audit` | Scan for vulnerabilities (OSV) |
+| Command                      | Description                                           |
+| ---------------------------- | ----------------------------------------------------- |
+| `fpm install <pkg>`          | Install packages (alias: `add`)                       |
+| `fpm remove <pkg>`           | Remove (aliases: `uninstall`, `rm`, flags: `-f` `-p`) |
+| `fpm autoremove`             | Remove orphaned unused dependencies                   |
+| `fpm mark --show <pkg>`      | Show if package is requested/dependency               |
+| `fpm mark --requested <pkg>` | Protect package from autoremove                       |
+| `fpm list`                   | List fpm packages (alias: `ls`)                       |
+| `fpm list -a`                | List ALL packages (all managers)                      |
+| `fpm sync`                   | Sync environment from lockfile                        |
+| `fpm lock`                   | Generate/update lockfile                              |
+| `fpm tree`                   | Show dependency tree                                  |
+| `fpm audit`                  | Scan for vulnerabilities (OSV)                        |
 
 ### Project
 
-| Command | Description |
-|---------|-------------|
-| `fpm init` | Create project (pyproject.toml + venv) |
-| `fpm run <cmd>` | Run in managed environment |
-| `fpm build` | Build wheel/sdist |
-| `fpm publish` | Upload to PyPI |
+| Command         | Description                            |
+| --------------- | -------------------------------------- |
+| `fpm init`      | Create project (pyproject.toml + venv) |
+| `fpm run <cmd>` | Run in managed environment             |
+| `fpm build`     | Build wheel/sdist                      |
+| `fpm publish`   | Upload to PyPI                         |
 
 ### Environment
 
-| Command | Description |
-|---------|-------------|
-| `fpm venv` | Create virtual environment |
-| `fpm python list` | List Python versions |
-| `fpm python install <ver>` | Install Python version |
-| `fpm python use <ver>` | Switch Python (`--system` for global) |
-| `fpm snapshot create [msg]` | Capture environment state |
-| `fpm snapshot restore <id>` | Roll back to snapshot |
-| `fpm snapshot diff <id>` | Compare snapshots |
+| Command                     | Description                           |
+| --------------------------- | ------------------------------------- |
+| `fpm venv`                  | Create virtual environment            |
+| `fpm python list`           | List Python versions                  |
+| `fpm python install <ver>`  | Install Python version                |
+| `fpm python use <ver>`      | Switch Python (`--system` for global) |
+| `fpm snapshot create [msg]` | Capture environment state             |
+| `fpm snapshot restore <id>` | Roll back to snapshot                 |
+| `fpm snapshot diff <id>`    | Compare snapshots                     |
 
 ### Tools & System
 
-| Command | Description |
-|---------|-------------|
-| `fpm tool run <pkg>` | Run tool (cached ephemeral env) |
-| `fpm tool install <pkg>` | Install CLI tool permanently |
-| `fpm cache gc` | Remove unused packages |
-| `fpm repair` | Diagnose + fix issues |
-| `fpm config show` | Display all settings |
+| Command                  | Description                     |
+| ------------------------ | ------------------------------- |
+| `fpm tool run <pkg>`     | Run tool (cached ephemeral env) |
+| `fpm tool install <pkg>` | Install CLI tool permanently    |
+| `fpm cache gc`           | Remove unused packages          |
+| `fpm repair`             | Diagnose + fix issues           |
+| `fpm config show`        | Display all settings            |
 
 ### Flags
 
-| Flag | Description |
-|------|-------------|
-| `-v` | Print version |
-| `-s`, `--system` | Install to system Python (required without venv) |
-| `-q`, `--quiet` | Suppress output |
-| `--json` | JSON output |
-| `--allow-insecure-host <host>` | Skip TLS for specific hosts |
-| `--log-level <level>` | debug/info/warn/error/off |
+| Flag                           | Description                                      |
+| ------------------------------ | ------------------------------------------------ |
+| `-v`                           | Print version                                    |
+| `-s`, `--system`               | Install to system Python (required without venv) |
+| `-q`, `--quiet`                | Suppress output                                  |
+| `--json`                       | JSON output                                      |
+| `--allow-insecure-host <host>` | Skip TLS for specific hosts                      |
+| `--log-level <level>`          | debug/info/warn/error/off                        |
 
 ## Configuration
 
@@ -223,33 +229,34 @@ allow-insecure-host = ["internal-pypi.corp.example.com"]
 level = "off"                   # debug | info | warn | error | off
 ```
 
-**Priority** (highest wins): CLI flags > env vars > project fpm.toml > user config > defaults
+**Priority** (highest wins): CLI flags > env vars > project fpm.toml > user
+config > defaults
 
 ## How It's Different
 
-| Feature | pip | uv | fpm |
-|---------|-----|----|----|
-| Content-addressable storage | No | No | Yes (zero duplication) |
-| Environment snapshots | No | No | Yes (instant restore) |
-| Cross-manager detection | No | No | Yes (pip, uv, conda, poetry, pdm) |
-| Immutable version pins | No | No | Yes (enforced by resolver) |
-| Dependency graph tracking | No | No | Yes (requested vs transitive) |
-| Autoremove orphans | No | No | Yes (like apt/pacman) |
-| Reflink support | No | No | Yes (CoW on APFS/btrfs) |
-| Reference-tracked GC | No | No | Yes (only removes orphans) |
-| Bundled CA certificates | certifi | webpki | Mozilla (built-in) |
-| Per-host TLS bypass | `--trusted-host` | `--allow-insecure-host` | `--allow-insecure-host` |
-| Requires venv for install | No | Yes (`--system`) | Yes (`--system`) |
+| Feature                     | pip              | uv                      | fpm                               |
+| --------------------------- | ---------------- | ----------------------- | --------------------------------- |
+| Content-addressable storage | No               | No                      | Yes (zero duplication)            |
+| Environment snapshots       | No               | No                      | Yes (instant restore)             |
+| Cross-manager detection     | No               | No                      | Yes (pip, uv, conda, poetry, pdm) |
+| Immutable version pins      | No               | No                      | Yes (enforced by resolver)        |
+| Dependency graph tracking   | No               | No                      | Yes (requested vs transitive)     |
+| Autoremove orphans          | No               | No                      | Yes (like apt/pacman)             |
+| Reflink support             | No               | No                      | Yes (CoW on APFS/btrfs)           |
+| Reference-tracked GC        | No               | No                      | Yes (only removes orphans)        |
+| Bundled CA certificates     | certifi          | webpki                  | Mozilla (built-in)                |
+| Per-host TLS bypass         | `--trusted-host` | `--allow-insecure-host` | `--allow-insecure-host`           |
+| Requires venv for install   | No               | Yes (`--system`)        | Yes (`--system`)                  |
 
 ## Platforms
 
-| Platform | Status |
-|----------|--------|
+| Platform                      | Status    |
+| ----------------------------- | --------- |
 | macOS (Apple Silicon + Intel) | Supported |
-| Linux (x86_64 + ARM64) | Supported |
-| Windows (x86_64) | Supported |
-| Docker (multi-arch) | Supported |
-| JupyterHub / multi-user | Supported |
+| Linux (x86_64 + ARM64)        | Supported |
+| Windows (x86_64)              | Supported |
+| Docker (multi-arch)           | Supported |
+| JupyterHub / multi-user       | Supported |
 
 ## Documentation
 

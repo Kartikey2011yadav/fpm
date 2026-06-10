@@ -40,13 +40,18 @@ fpm venv --python 3.11   # uses specific Python version
 fpm finds the active venv by walking up the directory tree looking for
 `pyvenv.cfg`. It also checks for `.venv/` in the current directory.
 
+**`VIRTUAL_ENV` is intentionally ignored.** Unlike pip, fpm uses directory-based
+detection only — just `cd` into your project and all commands target the venv.
+Leaving the directory (`cd ..`) deactivates the project environment. This
+matches how uv's project commands (`uv add`, `uv sync`) work.
+
 ### System vs Venv Installs
 
-| Command | Target | Behavior |
-|---------|--------|----------|
-| `fpm install requests` | .venv (if exists) | Errors if no venv found |
-| `fpm install -s requests` | System Python | Installs globally |
-| `fpm install --system requests` | System Python | Same as -s |
+| Command                         | Target            | Behavior                |
+| ------------------------------- | ----------------- | ----------------------- |
+| `fpm install requests`          | .venv (if exists) | Errors if no venv found |
+| `fpm install -s requests`       | System Python     | Installs globally       |
+| `fpm install --system requests` | System Python     | Same as -s              |
 
 This matches uv's model: explicit `--system` required for global installs.
 Prevents accidental system Python pollution.
@@ -55,12 +60,13 @@ Prevents accidental system Python pollution.
 
 ### Isolation
 
-Project A needs `requests==2.28`. Project B needs `requests==2.31`.
-Without venvs, they'd conflict. With venvs, each project has its own copy.
+Project A needs `requests==2.28`. Project B needs `requests==2.31`. Without
+venvs, they'd conflict. With venvs, each project has its own copy.
 
 ### Reproducibility
 
 `fpm.lock` + venv = exact same packages on every machine.
+
 ```bash
 git clone project
 cd project
@@ -69,8 +75,8 @@ fpm venv && fpm sync     # identical to the original developer's setup
 
 ### No sudo
 
-System-wide installs may need root. Venvs are per-user, per-project —
-no elevated permissions needed.
+System-wide installs may need root. Venvs are per-user, per-project — no
+elevated permissions needed.
 
 ## How fpm Uses Venvs
 
@@ -81,10 +87,21 @@ no elevated permissions needed.
 - **tree**: shows the dependency tree from the lockfile
 - **remove**: updates pyproject.toml (run `fpm sync` to apply)
 
-## Activation (Optional)
+## No Activation Needed
 
-fpm doesn't require venv activation. `fpm run` handles it automatically.
-But if you want to activate manually:
+fpm does **not** require `source .venv/bin/activate`. Simply being in the
+project directory is enough — all fpm commands auto-detect the `.venv`.
+
+```bash
+cd myproject     # ← this is all you need
+fpm install ...  # targets .venv automatically
+fpm list         # shows venv packages
+cd ..            # ← leaving = deactivated
+fpm list         # errors (no venv in scope)
+```
+
+If you still want shell-level access to the venv's Python (for `python`,
+`pytest`, etc. without `fpm run`), activation still works:
 
 ```bash
 source .venv/bin/activate    # bash/zsh
@@ -92,9 +109,14 @@ source .venv/bin/activate.fish  # fish
 .venv\Scripts\activate.bat   # Windows cmd
 ```
 
+Note: even after activation, fpm ignores `VIRTUAL_ENV` — it always uses
+directory detection. This prevents accidentally installing to a project's venv
+from outside its directory.
+
 ## Developer Reference
 
 Key code:
+
 - `internal/venv/create.go` — `Create()`, `Detect()`, `Venv` struct
 - `internal/cli/run_impl.go` — `buildVenvEnv()` for PATH setup
 - `internal/cli/install_impl.go` — venv detection + `--system` gating

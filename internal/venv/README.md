@@ -14,7 +14,9 @@ Virtual environment creation with activation scripts for all shells.
 - Standard venv structure (bin/, lib/, pyvenv.cfg)
 - Activation scripts: bash, zsh, fish, csh, PowerShell, cmd.exe
 - Symlinks Python binary (falls back to copy on Windows)
-- Auto-detection of existing venvs (`Detect()` walks up directory tree)
+- Directory-based venv detection (`Detect()` walks up directory tree)
+- `VIRTUAL_ENV` env var is intentionally ignored — like uv project commands, fpm
+  only detects venvs by being in (or under) the project directory
 - Supports any Python version (can use fpm-managed Python different from system)
 
 ## Files

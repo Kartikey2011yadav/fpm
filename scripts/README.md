@@ -4,14 +4,16 @@ Development and testing scripts for fpm.
 
 ## Scripts
 
-| Script                    | Purpose                            | Usage                                             |
-| ------------------------- | ---------------------------------- | ------------------------------------------------- |
-| `test-features.sh`        | Feature integration tests (Docker) | `./test-features.sh [groups...] [--log] [--list]` |
-| `check-all.sh`            | Run all CI checks locally          | `./check-all.sh`                                  |
-| `dev-setup.sh`            | Set up development environment     | `./dev-setup.sh`                                  |
-| `benchmark.sh`            | Benchmark fpm operations           | `./benchmark.sh [binary]`                         |
-| `generate-completions.sh` | Generate shell completions         | `./generate-completions.sh [binary]`              |
-| `release.sh`              | Create a new release               | `./release.sh <version>`                          |
+| Script                    | Purpose                            | Usage                                                   |
+| ------------------------- | ---------------------------------- | ------------------------------------------------------- |
+| `test-features.sh`        | Feature integration tests (Docker) | `./test-features.sh [groups...] [--log] [--list]`       |
+| `test-scenarios.sh`       | Real-world scenario demos (Docker) | `docker exec fpm-test bash /tmp/test-scenarios.sh`      |
+| `test-venv-isolation.sh`  | Venv/system isolation tests        | `docker exec fpm-test bash /tmp/test-venv-isolation.sh` |
+| `check-all.sh`            | Run all CI checks locally          | `./check-all.sh`                                        |
+| `dev-setup.sh`            | Set up development environment     | `./dev-setup.sh`                                        |
+| `benchmark.sh`            | Benchmark fpm operations           | `./benchmark.sh [binary]`                               |
+| `generate-completions.sh` | Generate shell completions         | `./generate-completions.sh [binary]`                    |
+| `release.sh`              | Create a new release               | `./release.sh <version>`                                |
 
 ## test-features.sh
 

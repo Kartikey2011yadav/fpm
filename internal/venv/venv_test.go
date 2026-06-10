@@ -149,7 +149,7 @@ func TestFindSitePackages_EmptyLib(t *testing.T) {
 	}
 }
 
-func TestDetect_UsesVIRTUAL_ENVEnvVar(t *testing.T) {
+func TestDetect_IgnoresVIRTUAL_ENVFromOutside(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create a venv at a path that is NOT reachable by walking up from cwd
@@ -162,20 +162,17 @@ func TestDetect_UsesVIRTUAL_ENVEnvVar(t *testing.T) {
 	// Set VIRTUAL_ENV to point to it
 	t.Setenv("VIRTUAL_ENV", venvPath)
 
-	// Detect from a directory with NO local venv should use VIRTUAL_ENV
+	// Detect from a directory with NO local venv should NOT use VIRTUAL_ENV
 	noVenvDir := filepath.Join(tmpDir, "no-venv-here")
 	os.MkdirAll(noVenvDir, 0755)
 
-	v, err := Detect(noVenvDir)
-	if err != nil {
-		t.Fatalf("Detect should find venv via VIRTUAL_ENV: %v", err)
-	}
-	if v.Path != venvPath {
-		t.Errorf("expected path from VIRTUAL_ENV %q, got %q", venvPath, v.Path)
+	_, err := Detect(noVenvDir)
+	if err == nil {
+		t.Error("Detect should NOT find venv via VIRTUAL_ENV when outside the project directory")
 	}
 }
 
-func TestDetect_VIRTUAL_ENV_TakesPriority(t *testing.T) {
+func TestDetect_LocalVenvWins_OverVIRTUAL_ENV(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create local .venv
@@ -192,20 +189,20 @@ func TestDetect_VIRTUAL_ENV_TakesPriority(t *testing.T) {
 	os.WriteFile(filepath.Join(remoteVenv, "pyvenv.cfg"), []byte("home = /usr/bin\n"), 0644)
 	os.WriteFile(filepath.Join(remoteBin, "python3"), []byte("#!/bin/sh\n"), 0755)
 
-	// VIRTUAL_ENV points to remote venv — it should take priority
+	// VIRTUAL_ENV points to remote venv — should be IGNORED
 	t.Setenv("VIRTUAL_ENV", remoteVenv)
 
 	v, err := Detect(tmpDir)
 	if err != nil {
-		t.Fatalf("Detect should succeed: %v", err)
+		t.Fatalf("Detect should succeed via local .venv: %v", err)
 	}
-	// VIRTUAL_ENV should win over local .venv
-	if v.Path != remoteVenv {
-		t.Errorf("VIRTUAL_ENV should take priority: expected %q, got %q", remoteVenv, v.Path)
+	// Local directory detection wins — VIRTUAL_ENV is ignored
+	if v.Path != localVenv {
+		t.Errorf("local .venv should win: expected %q, got %q", localVenv, v.Path)
 	}
 }
 
-func TestDetect_IgnoresInvalidVIRTUAL_ENV(t *testing.T) {
+func TestDetect_IgnoresVIRTUAL_ENV_UsesLocalVenv(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create local .venv
@@ -215,16 +212,16 @@ func TestDetect_IgnoresInvalidVIRTUAL_ENV(t *testing.T) {
 	os.WriteFile(filepath.Join(localVenv, "pyvenv.cfg"), []byte("home = /usr/bin\n"), 0644)
 	os.WriteFile(filepath.Join(localBin, "python3"), []byte("#!/bin/sh\n"), 0755)
 
-	// VIRTUAL_ENV points to a non-existent path
-	t.Setenv("VIRTUAL_ENV", "/nonexistent/path/.venv")
+	// VIRTUAL_ENV is set but fpm should ignore it entirely
+	t.Setenv("VIRTUAL_ENV", "/some/other/path/.venv")
 
-	// Should fall back to local .venv detection
+	// Should detect local .venv by directory only
 	v, err := Detect(tmpDir)
 	if err != nil {
-		t.Fatalf("Detect should fall back to local venv: %v", err)
+		t.Fatalf("Detect should find local venv by directory: %v", err)
 	}
 	if v.Path != localVenv {
-		t.Errorf("expected fallback to local %q, got %q", localVenv, v.Path)
+		t.Errorf("expected local %q, got %q", localVenv, v.Path)
 	}
 }
 

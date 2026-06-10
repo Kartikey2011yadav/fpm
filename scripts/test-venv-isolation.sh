@@ -280,7 +280,7 @@ cd /tmp/iso-test-14a
 check "project-a requests intact after project-b remove" fpm list 2>/dev/null | grep -q "requests"
 
 # ════════════════════════════════════════════════════════════════════════
-section "15. VIRTUAL_ENV DETECTION: Respects activated venv from different dir"
+section "15. VIRTUAL_ENV IGNORED: cd out of project loses venv access"
 # ════════════════════════════════════════════════════════════════════════
 
 cd /tmp/iso-test-14a  # this has a venv with requests
@@ -290,8 +290,12 @@ export VIRTUAL_ENV="/tmp/iso-test-14a/.venv"
 
 cd /tmp  # cd away from project-a
 
-# fpm should use project-a's venv (from VIRTUAL_ENV)
-check "VIRTUAL_ENV overrides directory detection" fpm list 2>/dev/null | grep -q "requests"
+# fpm should NOT use VIRTUAL_ENV from outside the project directory
+check_fail "VIRTUAL_ENV ignored outside project dir" fpm list 2>/dev/null | grep -q "requests"
+
+# But back in the project dir, it works (regardless of VIRTUAL_ENV)
+cd /tmp/iso-test-14a
+check "In project dir, venv detected by directory" fpm list 2>/dev/null | grep -q "requests"
 
 unset VIRTUAL_ENV
 
