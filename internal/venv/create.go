@@ -151,6 +151,25 @@ func linkPython(binDir string, interp *python.Interpreter) (string, error) {
 }
 
 func Detect(dir string) (*Venv, error) {
+	// Check VIRTUAL_ENV env var first (set by activate script)
+	if envVenv := os.Getenv("VIRTUAL_ENV"); envVenv != "" {
+		cfgPath := filepath.Join(envVenv, "pyvenv.cfg")
+		if _, err := os.Stat(cfgPath); err == nil {
+			binDir := filepath.Join(envVenv, binDirName())
+			pythonPath := filepath.Join(binDir, pythonBinName())
+			if _, err := os.Stat(pythonPath); err == nil {
+				interp, _ := python.Probe(pythonPath)
+				return &Venv{
+					Path:         envVenv,
+					BinDir:       binDir,
+					PythonPath:   pythonPath,
+					Interpreter:  interp,
+					SitePackages: findSitePackages(envVenv),
+				}, nil
+			}
+		}
+	}
+
 	// Walk up to find pyvenv.cfg
 	current := dir
 	for {

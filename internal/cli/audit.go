@@ -23,12 +23,14 @@ var auditCmd = &cobra.Command{
 		var dirs []string
 		if activeVenv != nil && !flagSystem {
 			dirs = []string{activeVenv.SitePackages}
-		} else if flagSystem || activeVenv == nil {
+		} else if flagSystem {
 			sysDirs := findSystemSitePackages()
 			if len(sysDirs) == 0 {
 				return fmt.Errorf("no Python environment found")
 			}
 			dirs = sysDirs
+		} else {
+			return fmt.Errorf("no virtual environment found. Use --system to audit system packages, or run from a project directory")
 		}
 
 		scanner := env.NewScanner(dirs)

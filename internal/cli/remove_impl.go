@@ -48,39 +48,46 @@ func runAutoremove(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no virtual environment found. Use --system to check system packages")
 	}
 
-	// Use graph first, fall back to METADATA scan
+	// Use graph first, fall back to METADATA scan (recursive until no new orphans)
 	envPath := "global"
 	if activeVenv != nil && !flagSystem {
 		envPath = activeVenv.Path
 	}
 	graph := depgraph.Load(envPath)
-	orphans := graph.Orphans()
-
-	// Fallback: if graph is empty (fpm just installed), use METADATA scan
-	if len(orphans) == 0 {
-		orphans = findOrphanDeps(targetSitePackages, nil)
-	}
-
-	if len(orphans) == 0 {
-		fmt.Println("  No orphaned packages found.")
-		return nil
-	}
-
-	confirmed := confirmRemoval(orphans)
-	if confirmed == nil {
-		return nil
-	}
 
 	removed := 0
-	for _, name := range confirmed {
-		pkgName := types.NewPackageName(name)
-		if err := uninstallPackage(targetSitePackages, pkgName); err != nil {
-			fmt.Printf("  \033[31m✗\033[0m %s: %v\n", name, err)
-			continue
+	for {
+		orphans := graph.Orphans()
+
+		// Fallback: if graph is empty (fpm just installed), use METADATA scan
+		if len(orphans) == 0 {
+			orphans = findOrphanDeps(targetSitePackages, nil)
 		}
-		graph.Remove(types.NewPackageName(name).Normalized())
-		fmt.Printf("  \033[32m✓\033[0m Removed %s\n", name)
-		removed++
+
+		if len(orphans) == 0 {
+			break
+		}
+
+		confirmed := confirmRemoval(orphans)
+		if confirmed == nil {
+			break
+		}
+
+		for _, name := range confirmed {
+			pkgName := types.NewPackageName(name)
+			if err := uninstallPackage(targetSitePackages, pkgName); err != nil {
+				fmt.Printf("  \033[31m✗\033[0m %s: %v\n", name, err)
+				continue
+			}
+			graph.Remove(types.NewPackageName(name).Normalized())
+			fmt.Printf("  \033[32m✓\033[0m Removed %s\n", name)
+			removed++
+		}
+	}
+
+	if removed == 0 {
+		fmt.Println("  No orphaned packages found.")
+		return nil
 	}
 
 	graph.Save(envPath)
@@ -162,27 +169,31 @@ func runRemove(cmd *cobra.Command, args []string) error {
 		graph.Remove(types.NewPackageName(name).Normalized())
 	}
 
-	// Purge unused dependencies using the graph
+	// Purge unused dependencies using the graph (recursive until no new orphans)
 	if purge && removed > 0 && targetSitePackages != "" {
-		orphans := graph.Orphans()
-		// Fallback to METADATA scan if graph is empty (pre-existing packages)
-		if len(orphans) == 0 {
-			orphans = findOrphanDeps(targetSitePackages, args)
-		}
-		if len(orphans) > 0 {
+		for {
+			orphans := graph.Orphans()
+			// Fallback to METADATA scan if graph is empty (pre-existing packages)
+			if len(orphans) == 0 {
+				orphans = findOrphanDeps(targetSitePackages, args)
+			}
+			if len(orphans) == 0 {
+				break
+			}
 			confirmed := confirmRemoval(orphans)
-			if confirmed != nil {
-				fmt.Printf("\n  Removing %d unused dependencies:\n", len(confirmed))
-				for _, orphan := range confirmed {
-					pkgName := types.NewPackageName(orphan)
-					if err := uninstallPackage(targetSitePackages, pkgName); err != nil {
-						fmt.Printf("  \033[31m✗\033[0m %s: %v\n", orphan, err)
-						continue
-					}
-					graph.Remove(types.NewPackageName(orphan).Normalized())
-					fmt.Printf("  \033[32m✓\033[0m Removed %s \033[2m(unused dependency)\033[0m\n", orphan)
-					removed++
+			if confirmed == nil {
+				break
+			}
+			fmt.Printf("\n  Removing %d unused dependencies:\n", len(confirmed))
+			for _, orphan := range confirmed {
+				pkgName := types.NewPackageName(orphan)
+				if err := uninstallPackage(targetSitePackages, pkgName); err != nil {
+					fmt.Printf("  \033[31m✗\033[0m %s: %v\n", orphan, err)
+					continue
 				}
+				graph.Remove(types.NewPackageName(orphan).Normalized())
+				fmt.Printf("  \033[32m✓\033[0m Removed %s \033[2m(unused dependency)\033[0m\n", orphan)
+				removed++
 			}
 		}
 	}

@@ -28,33 +28,41 @@ func runPipList(cmd *cobra.Command, args []string) error {
 	showAll, _ := cmd.Flags().GetBool("all")
 	managerFilter, _ := cmd.Flags().GetString("manager")
 
-	// Gather site-packages directories (deduplicated)
 	seen := make(map[string]bool)
 	var dirs []string
 
-	if activeVenv != nil && activeVenv.SitePackages != "" {
+	if flagSystem {
+		sysDirs := findSystemSitePackages()
+		if len(sysDirs) == 0 {
+			return fmt.Errorf("no Python environment found")
+		}
+		for _, d := range sysDirs {
+			dirs = append(dirs, d)
+			seen[d] = true
+		}
+	} else if activeVenv != nil && activeVenv.SitePackages != "" {
 		dirs = append(dirs, activeVenv.SitePackages)
 		seen[activeVenv.SitePackages] = true
-	}
 
-	// When --all or no venv found, scan system Python site-packages
-	if showAll || activeVenv == nil {
-		sysDirs := findSystemSitePackages()
-		for _, d := range sysDirs {
-			if !seen[d] {
-				dirs = append(dirs, d)
-				seen[d] = true
+		if showAll {
+			sysDirs := findSystemSitePackages()
+			for _, d := range sysDirs {
+				if !seen[d] {
+					dirs = append(dirs, d)
+					seen[d] = true
+				}
+			}
+			if activeVenv.Interpreter != nil {
+				for _, d := range env.FindSitePackagesDirs(activeVenv.Interpreter.SysPaths) {
+					if !seen[d] {
+						dirs = append(dirs, d)
+						seen[d] = true
+					}
+				}
 			}
 		}
-	}
-
-	if activeVenv != nil && activeVenv.Interpreter != nil && showAll {
-		for _, d := range env.FindSitePackagesDirs(activeVenv.Interpreter.SysPaths) {
-			if !seen[d] {
-				dirs = append(dirs, d)
-				seen[d] = true
-			}
-		}
+	} else {
+		return fmt.Errorf("no virtual environment found. Use --system to list system packages, or run from a project directory")
 	}
 
 	scanner := env.NewScanner(dirs)

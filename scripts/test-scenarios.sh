@@ -56,16 +56,16 @@ check "Correctly blocks without --system" test $? -ne 0
 run "Install with -s flag" fpm install -s requests
 check "Install succeeded" test $? -eq 0
 
-run "List fpm packages" fpm list
-check "requests visible" fpm list 2>/dev/null | grep -q requests
+run "List fpm packages" fpm list --system
+check "requests visible" fpm list --system 2>/dev/null | grep -q requests
 
 # ════════════════════════════════════════════════════════════════════════
 section "2. Cross-Manager Detection"
 # ════════════════════════════════════════════════════════════════════════
 
-run "List all managers" fpm list -a
-check "Sees pip packages" fpm list -a 2>/dev/null | grep -q "pip"
-check "Sees fpm packages" fpm list -a 2>/dev/null | grep -q "fpm"
+run "List all managers" fpm list -a --system
+check "Sees pip packages" fpm list -a --system 2>/dev/null | grep -q "pip"
+check "Sees fpm packages" fpm list -a --system 2>/dev/null | grep -q "fpm"
 
 run "Try installing pip's 'six' via fpm" fpm install -s six
 check "Detects cross-manager" fpm install -s six 2>&1 | grep -qi "already installed\|skipping"
@@ -80,9 +80,9 @@ run "Show dependency tree" fpm tree --system
 run "Mark status" fpm mark --show flask requests urllib3
 
 run "Remove flask with purge" fpm remove -sp flask
-check "Flask removed" ! fpm list 2>/dev/null | grep -q "flask"
-check "requests still present" fpm list 2>/dev/null | grep -q "requests"
-check "urllib3 kept (needed by requests)" fpm list 2>/dev/null | grep -q "urllib3"
+check "Flask removed" ! fpm list --system 2>/dev/null | grep -q "flask"
+check "requests still present" fpm list --system 2>/dev/null | grep -q "requests"
+check "urllib3 kept (needed by requests)" fpm list --system 2>/dev/null | grep -q "urllib3"
 
 # ════════════════════════════════════════════════════════════════════════
 section "4. Immutable Package Pinning"
@@ -153,11 +153,11 @@ section "8. Force Remove & Autoremove"
 cd /tmp
 run "Install flask system-wide" fpm install -s flask
 run "Remove flask only (no purge)" fpm remove -s flask
-run "Show orphans" fpm list
-run "Autoremove cleans orphans" fpm autoremove --system
+run "Show orphans" fpm list --system
+run "Autoremove cleans orphans" bash -c 'echo "a" | fpm autoremove --system'
 
-REMAINING=$(fpm list 2>/dev/null | grep -c "fpm" || echo 0)
-check "Orphans removed (${REMAINING} packages remain)" test "$REMAINING" -lt 13
+REMAINING=$(fpm list --system 2>/dev/null | grep -c "fpm" || true)
+check "Orphans removed (${REMAINING} packages remain)" test "$REMAINING" -lt 3
 
 # ════════════════════════════════════════════════════════════════════════
 section "9. Config & Repair"

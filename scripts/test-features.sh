@@ -155,16 +155,16 @@ fi
 
 if should_run "list"; then
     section "List Command"
-    fpm list | grep -q "requests" && pass "fpm list shows fpm packages" || fail "fpm list"
-    fpm list -a | grep -q "pip" && pass "fpm list -a shows pip packages" || fail "fpm list -a"
-    fpm list --manager fpm | grep -q "requests" && pass "fpm list --manager fpm" || fail "list --manager"
-    COUNT=$(fpm list 2>/dev/null | grep -c "fpm" || true)
+    fpm list --system | grep -q "requests" && pass "fpm list shows fpm packages" || fail "fpm list"
+    fpm list -a --system | grep -q "pip" && pass "fpm list -a shows pip packages" || fail "fpm list -a"
+    fpm list --system --manager fpm | grep -q "requests" && pass "fpm list --manager fpm" || fail "list --manager"
+    COUNT=$(fpm list --system 2>/dev/null | grep -c "fpm" || true)
     [ "$COUNT" -gt 0 ] && pass "fpm list: $COUNT fpm packages" || fail "no fpm packages"
 fi
 
 if should_run "pip"; then
     section "Pip Compatibility"
-    fpm pip list | grep -q "requests" && pass "fpm pip list" || fail "fpm pip list"
+    fpm pip list --system | grep -q "requests" && pass "fpm pip list" || fail "fpm pip list"
     fpm pip freeze --system | grep -q "requests==" && pass "fpm pip freeze --system" || fail "pip freeze"
     fpm pip show --system requests | grep -q "Version:" && pass "fpm pip show --system" || fail "pip show"
 fi
@@ -316,23 +316,29 @@ if should_run "crossmanager"; then
     # Ensure pip package exists for testing
     pip install six --trusted-host pypi.org --trusted-host files.pythonhosted.org -q 2>/dev/null || true
 
+    # Install a different package via fpm so we have both managers represented
+    fpm install -s markupsafe >/dev/null 2>&1
+
     # Detect pip-installed package
     OUT=$(fpm install -s six 2>&1)
     echo "$OUT" | grep -qi "already installed via pip\|skipping" && pass "detects pip package (same version)" || fail "cross-manager detect"
     echo "$OUT" | grep -qi "Nothing to install\|skipping\|already" && pass "skips already-installed" || fail "cross-manager skip"
 
-    # fpm list -a shows correct manager attribution
-    fpm list -a | grep -q "pip" && pass "list -a shows pip packages" || fail "list -a pip"
-    fpm list -a | grep -q "fpm" && pass "list -a shows fpm packages" || fail "list -a fpm"
+    # fpm list -a --system shows correct manager attribution
+    fpm list -a --system | grep -q "pip" && pass "list -a shows pip packages" || fail "list -a pip"
+    fpm list -a --system | grep -q "fpm" && pass "list -a shows fpm packages" || fail "list -a fpm"
 
     # fpm list (default) shows ONLY fpm packages
-    LIST_DEFAULT=$(fpm list 2>/dev/null)
+    LIST_DEFAULT=$(fpm list --system 2>/dev/null)
     PIPMATCH=$(echo "$LIST_DEFAULT" | grep -c " pip " || true)
     [ "$PIPMATCH" -eq 0 ] && pass "default list excludes pip" || fail "default list should not show pip"
 
     # Manager filter works
     fpm list -a --system 2>/dev/null | grep -q "pip" && pass "filter by pip manager" || fail "filter pip"
     fpm list -a --system 2>/dev/null | grep -q "fpm" && pass "filter by fpm manager" || fail "filter fpm"
+
+    # Cleanup
+    fpm remove -s markupsafe >/dev/null 2>&1
 fi
 
 if should_run "immutable"; then
