@@ -85,20 +85,21 @@ section "2. CROSS-MANAGER: Snapshot captures pip, restore brings it back"
 rm -rf /tmp/ss-2 && mkdir /tmp/ss-2 && cd /tmp/ss-2
 fpm init . >/dev/null 2>&1
 
-# Install via pip into the venv
-.venv/bin/pip install chardet --trusted-host pypi.org --trusted-host files.pythonhosted.org -q 2>/dev/null
-check "chardet installed via pip" bash -c "fpm list -a 2>/dev/null | grep -q chardet"
+# Install pip into venv, then install chardet via pip
+.venv/bin/python3 -m ensurepip >/dev/null 2>&1
+.venv/bin/python3 -m pip install chardet --trusted-host pypi.org --trusted-host files.pythonhosted.org -q 2>/dev/null
+check "chardet installed via pip" bash -c "fpm list -a 2>/dev/null | grep -qi chardet"
 
 fpm snapshot create "with-pip-chardet" >/dev/null 2>&1
 SNAP=$(fpm snapshot list 2>&1 | grep with-pip | grep -oE "[0-9]{8}-[0-9]{6}-[0-9]+" | head -1)
 
 # Remove chardet
-.venv/bin/pip uninstall -y chardet -q 2>/dev/null
-check_fail "chardet removed" bash -c "fpm list -a 2>/dev/null | grep -q chardet"
+.venv/bin/python3 -m pip uninstall -y chardet -q 2>/dev/null
+check_fail "chardet removed" bash -c "fpm list -a 2>/dev/null | grep -qi chardet"
 
 # Restore
 fpm snapshot restore "$SNAP" >/dev/null 2>&1
-check "chardet restored from pip" bash -c "fpm list -a 2>/dev/null | grep -q chardet"
+check "chardet restored from pip" bash -c "fpm list -a 2>/dev/null | grep -qi chardet"
 
 # ════════════════════════════════════════════════════════════════════════
 section "3. NEW PACKAGES CLEANED: Packages added after snapshot get removed"
@@ -113,7 +114,7 @@ SNAP=$(fpm snapshot list 2>&1 | grep only-six | grep -oE "[0-9]{8}-[0-9]{6}-[0-9
 
 # Add more packages
 fpm install flask >/dev/null 2>&1
-check "flask added" bash -c "fpm list 2>/dev/null | grep -q flask"
+check "flask added" bash -c "fpm list 2>/dev/null | grep -qi flask"
 
 # Restore removes flask
 fpm snapshot restore "$SNAP" >/dev/null 2>&1

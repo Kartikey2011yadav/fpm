@@ -471,8 +471,14 @@ func removePackageFromSitePackages(name string, sitePackages string) error {
 }
 
 func reinstallExternalPackage(pkg SnapshotPackage, sitePackages string) error {
-	cmd := exec.Command("pip", "install", "--target", sitePackages,
-		"--no-deps", "--quiet", fmt.Sprintf("%s==%s", pkg.Name, pkg.Version))
+	args := []string{"install", "--target", sitePackages, "--no-deps", "--quiet"}
+	if hosts := os.Getenv("FPM_ALLOW_INSECURE_HOST"); hosts != "" {
+		for _, h := range strings.Split(hosts, ",") {
+			args = append(args, "--trusted-host", strings.TrimSpace(h))
+		}
+	}
+	args = append(args, fmt.Sprintf("%s==%s", pkg.Name, pkg.Version))
+	cmd := exec.Command("pip", args...)
 	cmd.Env = append(os.Environ(), "PIP_DISABLE_PIP_VERSION_CHECK=1")
 	return cmd.Run()
 }
