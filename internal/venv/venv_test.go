@@ -3,20 +3,35 @@ package venv
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
+
+func testBinDir() string {
+	if runtime.GOOS == "windows" {
+		return "Scripts"
+	}
+	return "bin"
+}
+
+func testPythonBin() string {
+	if runtime.GOOS == "windows" {
+		return "python.exe"
+	}
+	return "python3"
+}
 
 func TestDetect_FindsVenvInCwd(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create a fake venv structure
 	venvPath := filepath.Join(tmpDir, ".venv")
-	binDir := filepath.Join(venvPath, "bin")
+	binDir := filepath.Join(venvPath, testBinDir())
 	os.MkdirAll(binDir, 0755)
 	os.WriteFile(filepath.Join(venvPath, "pyvenv.cfg"), []byte("home = /usr/bin\n"), 0644)
 
 	// Create a fake python3 binary
-	os.WriteFile(filepath.Join(binDir, "python3"), []byte("#!/bin/sh\n"), 0755)
+	os.WriteFile(filepath.Join(binDir, testPythonBin()), []byte("#!/bin/sh\n"), 0755)
 
 	v, err := Detect(tmpDir)
 	if err != nil {
@@ -30,23 +45,24 @@ func TestDetect_FindsVenvInCwd(t *testing.T) {
 func TestDetect_FindsVenvByWalkingUp(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create venv at root
-	binDir := filepath.Join(tmpDir, "bin")
+	// Create a .venv at the project root
+	venvPath := filepath.Join(tmpDir, ".venv")
+	binDir := filepath.Join(venvPath, testBinDir())
 	os.MkdirAll(binDir, 0755)
-	os.WriteFile(filepath.Join(tmpDir, "pyvenv.cfg"), []byte("home = /usr/bin\n"), 0644)
-	os.WriteFile(filepath.Join(binDir, "python3"), []byte("#!/bin/sh\n"), 0755)
+	os.WriteFile(filepath.Join(venvPath, "pyvenv.cfg"), []byte("home = /usr/bin\n"), 0644)
+	os.WriteFile(filepath.Join(binDir, testPythonBin()), []byte("#!/bin/sh\n"), 0755)
 
-	// Create subdirectory
+	// Create subdirectory within the project
 	subDir := filepath.Join(tmpDir, "src", "pkg")
 	os.MkdirAll(subDir, 0755)
 
-	// Detect from subdirectory should walk up and find pyvenv.cfg
+	// Detect from subdirectory should walk up and find .venv
 	v, err := Detect(subDir)
 	if err != nil {
 		t.Fatalf("Detect should walk up and find venv: %v", err)
 	}
-	if v.Path != tmpDir {
-		t.Errorf("expected path %q (parent), got %q", tmpDir, v.Path)
+	if v.Path != venvPath {
+		t.Errorf("expected path %q, got %q", venvPath, v.Path)
 	}
 }
 
@@ -70,10 +86,10 @@ func TestDetect_DoesNotDetectSiblingVenv(t *testing.T) {
 
 	// Only project-a has a venv
 	venvPath := filepath.Join(projectA, ".venv")
-	binDir := filepath.Join(venvPath, "bin")
+	binDir := filepath.Join(venvPath, testBinDir())
 	os.MkdirAll(binDir, 0755)
 	os.WriteFile(filepath.Join(venvPath, "pyvenv.cfg"), []byte("home = /usr/bin\n"), 0644)
-	os.WriteFile(filepath.Join(binDir, "python3"), []byte("#!/bin/sh\n"), 0755)
+	os.WriteFile(filepath.Join(binDir, testPythonBin()), []byte("#!/bin/sh\n"), 0755)
 
 	// Detect from project-b should NOT find project-a's venv
 	_, err := Detect(projectB)
@@ -91,10 +107,10 @@ func TestDetect_IsolationBetweenProjects(t *testing.T) {
 
 	for _, proj := range []string{projectA, projectB} {
 		venvPath := filepath.Join(proj, ".venv")
-		binDir := filepath.Join(venvPath, "bin")
+		binDir := filepath.Join(venvPath, testBinDir())
 		os.MkdirAll(binDir, 0755)
 		os.WriteFile(filepath.Join(venvPath, "pyvenv.cfg"), []byte("home = /usr/bin\n"), 0644)
-		os.WriteFile(filepath.Join(binDir, "python3"), []byte("#!/bin/sh\n"), 0755)
+		os.WriteFile(filepath.Join(binDir, testPythonBin()), []byte("#!/bin/sh\n"), 0755)
 	}
 
 	// Detect from project-a finds project-a's venv
@@ -123,13 +139,16 @@ func TestDetect_IsolationBetweenProjects(t *testing.T) {
 	}
 }
 
-func TestSitePackagesDir_Linux(t *testing.T) {
-	// This test validates the site-packages path generation
+func TestSitePackagesDir(t *testing.T) {
 	tmpDir := t.TempDir()
 	venvPath := filepath.Join(tmpDir, ".venv")
 
-	// Create lib/python3.12/site-packages
-	spDir := filepath.Join(venvPath, "lib", "python3.12", "site-packages")
+	var spDir string
+	if runtime.GOOS == "windows" {
+		spDir = filepath.Join(venvPath, "Lib", "site-packages")
+	} else {
+		spDir = filepath.Join(venvPath, "lib", "python3.12", "site-packages")
+	}
 	os.MkdirAll(spDir, 0755)
 
 	result := findSitePackages(venvPath)
@@ -139,6 +158,9 @@ func TestSitePackagesDir_Linux(t *testing.T) {
 }
 
 func TestFindSitePackages_EmptyLib(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows always finds Lib/site-packages if Lib exists")
+	}
 	tmpDir := t.TempDir()
 	venvPath := filepath.Join(tmpDir, ".venv")
 	os.MkdirAll(filepath.Join(venvPath, "lib"), 0755)
@@ -154,10 +176,10 @@ func TestDetect_IgnoresVIRTUAL_ENVFromOutside(t *testing.T) {
 
 	// Create a venv at a path that is NOT reachable by walking up from cwd
 	venvPath := filepath.Join(tmpDir, "other-project", ".venv")
-	binDir := filepath.Join(venvPath, "bin")
+	binDir := filepath.Join(venvPath, testBinDir())
 	os.MkdirAll(binDir, 0755)
 	os.WriteFile(filepath.Join(venvPath, "pyvenv.cfg"), []byte("home = /usr/bin\n"), 0644)
-	os.WriteFile(filepath.Join(binDir, "python3"), []byte("#!/bin/sh\n"), 0755)
+	os.WriteFile(filepath.Join(binDir, testPythonBin()), []byte("#!/bin/sh\n"), 0755)
 
 	// Set VIRTUAL_ENV to point to it
 	t.Setenv("VIRTUAL_ENV", venvPath)
@@ -249,6 +271,9 @@ func TestDetect_UnsetVIRTUAL_ENV_UsesDirectory(t *testing.T) {
 }
 
 func TestFindSitePackages_MultiplePythonVersions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows uses Lib/site-packages without python version dirs")
+	}
 	tmpDir := t.TempDir()
 	venvPath := filepath.Join(tmpDir, ".venv")
 

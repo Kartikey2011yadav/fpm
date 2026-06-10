@@ -155,9 +155,10 @@ func Detect(dir string) (*Venv, error) {
 	// VIRTUAL_ENV is intentionally ignored: fpm detects the venv by being
 	// in (or under) the project directory. Cd-ing out means no venv access.
 
-	// Walk up to find pyvenv.cfg
+	// Walk up to find pyvenv.cfg or .venv/ at each level
 	current := dir
 	for {
+		// Check if current directory IS a venv (has pyvenv.cfg directly)
 		cfgPath := filepath.Join(current, "pyvenv.cfg")
 		if _, err := os.Stat(cfgPath); err == nil {
 			binDir := filepath.Join(current, binDirName())
@@ -174,27 +175,29 @@ func Detect(dir string) (*Venv, error) {
 			}
 		}
 
+		// Check if current directory contains a .venv/ subdirectory
+		venvPath := filepath.Join(current, ".venv")
+		venvCfg := filepath.Join(venvPath, "pyvenv.cfg")
+		if _, err := os.Stat(venvCfg); err == nil {
+			binDir := filepath.Join(venvPath, binDirName())
+			pythonPath := filepath.Join(binDir, pythonBinName())
+			if _, err := os.Stat(pythonPath); err == nil {
+				interp, _ := python.Probe(pythonPath)
+				return &Venv{
+					Path:         venvPath,
+					BinDir:       binDir,
+					PythonPath:   pythonPath,
+					Interpreter:  interp,
+					SitePackages: findSitePackages(venvPath),
+				}, nil
+			}
+		}
+
 		parent := filepath.Dir(current)
 		if parent == current {
 			break
 		}
 		current = parent
-	}
-
-	// Check .venv in the given directory
-	venvPath := filepath.Join(dir, ".venv")
-	cfgPath := filepath.Join(venvPath, "pyvenv.cfg")
-	if _, err := os.Stat(cfgPath); err == nil {
-		binDir := filepath.Join(venvPath, binDirName())
-		pythonPath := filepath.Join(binDir, pythonBinName())
-		interp, _ := python.Probe(pythonPath)
-		return &Venv{
-			Path:         venvPath,
-			BinDir:       binDir,
-			PythonPath:   pythonPath,
-			Interpreter:  interp,
-			SitePackages: findSitePackages(venvPath),
-		}, nil
 	}
 
 	return nil, fmt.Errorf("no virtual environment found")
