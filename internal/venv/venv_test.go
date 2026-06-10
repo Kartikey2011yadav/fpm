@@ -199,17 +199,17 @@ func TestDetect_LocalVenvWins_OverVIRTUAL_ENV(t *testing.T) {
 
 	// Create local .venv
 	localVenv := filepath.Join(tmpDir, ".venv")
-	localBin := filepath.Join(localVenv, "bin")
+	localBin := filepath.Join(localVenv, testBinDir())
 	os.MkdirAll(localBin, 0755)
 	os.WriteFile(filepath.Join(localVenv, "pyvenv.cfg"), []byte("home = /usr/bin\n"), 0644)
-	os.WriteFile(filepath.Join(localBin, "python3"), []byte("#!/bin/sh\n"), 0755)
+	os.WriteFile(filepath.Join(localBin, testPythonBin()), []byte("#!/bin/sh\n"), 0755)
 
 	// Create remote venv referenced by VIRTUAL_ENV
 	remoteVenv := filepath.Join(tmpDir, "remote", ".venv")
-	remoteBin := filepath.Join(remoteVenv, "bin")
+	remoteBin := filepath.Join(remoteVenv, testBinDir())
 	os.MkdirAll(remoteBin, 0755)
 	os.WriteFile(filepath.Join(remoteVenv, "pyvenv.cfg"), []byte("home = /usr/bin\n"), 0644)
-	os.WriteFile(filepath.Join(remoteBin, "python3"), []byte("#!/bin/sh\n"), 0755)
+	os.WriteFile(filepath.Join(remoteBin, testPythonBin()), []byte("#!/bin/sh\n"), 0755)
 
 	// VIRTUAL_ENV points to remote venv — should be IGNORED
 	t.Setenv("VIRTUAL_ENV", remoteVenv)
@@ -229,10 +229,10 @@ func TestDetect_IgnoresVIRTUAL_ENV_UsesLocalVenv(t *testing.T) {
 
 	// Create local .venv
 	localVenv := filepath.Join(tmpDir, ".venv")
-	localBin := filepath.Join(localVenv, "bin")
+	localBin := filepath.Join(localVenv, testBinDir())
 	os.MkdirAll(localBin, 0755)
 	os.WriteFile(filepath.Join(localVenv, "pyvenv.cfg"), []byte("home = /usr/bin\n"), 0644)
-	os.WriteFile(filepath.Join(localBin, "python3"), []byte("#!/bin/sh\n"), 0755)
+	os.WriteFile(filepath.Join(localBin, testPythonBin()), []byte("#!/bin/sh\n"), 0755)
 
 	// VIRTUAL_ENV is set but fpm should ignore it entirely
 	t.Setenv("VIRTUAL_ENV", "/some/other/path/.venv")
@@ -252,10 +252,10 @@ func TestDetect_UnsetVIRTUAL_ENV_UsesDirectory(t *testing.T) {
 
 	// Create local .venv
 	localVenv := filepath.Join(tmpDir, ".venv")
-	localBin := filepath.Join(localVenv, "bin")
+	localBin := filepath.Join(localVenv, testBinDir())
 	os.MkdirAll(localBin, 0755)
 	os.WriteFile(filepath.Join(localVenv, "pyvenv.cfg"), []byte("home = /usr/bin\n"), 0644)
-	os.WriteFile(filepath.Join(localBin, "python3"), []byte("#!/bin/sh\n"), 0755)
+	os.WriteFile(filepath.Join(localBin, testPythonBin()), []byte("#!/bin/sh\n"), 0755)
 
 	// No VIRTUAL_ENV set (simulates "deactivate" was called)
 	t.Setenv("VIRTUAL_ENV", "")
