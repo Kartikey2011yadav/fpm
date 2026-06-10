@@ -140,6 +140,43 @@ var snapshotRestoreCmd = &cobra.Command{
 		scanner := env.NewScanner(envInfo.dirs)
 		currentScan, _ := scanner.Scan()
 
+		// Detect system conflicts (only for project-level restores)
+		systemStrategy := snapshot.StrategyAbort
+		systemSitePackages := ""
+		if !flagSystem {
+			sysDirs := findSystemSitePackages()
+			if len(sysDirs) > 0 {
+				systemSitePackages = sysDirs[0]
+				sysScanner := env.NewScanner(sysDirs)
+				sysScan, _ := sysScanner.Scan()
+				conflicts := snapshot.DetectSystemConflicts(snap, sysScan)
+				if len(conflicts) > 0 {
+					fmt.Printf("\n  \033[33m⚠\033[0m System package conflicts detected:\n")
+					for _, c := range conflicts {
+						fmt.Printf("    %s: snapshot needs %s, system has %s (%s)\n",
+							c.Package, c.SnapshotVersion, c.CurrentVersion, c.Manager)
+					}
+					fmt.Printf("\n  How to resolve?\n")
+					fmt.Printf("    [1] Roll back system packages too\n")
+					fmt.Printf("    [2] Install at project level (overrides system)\n")
+					fmt.Printf("    [3] Abort (fix system packages manually)\n")
+					fmt.Printf("  Choice [1/2/3]: ")
+
+					var choice string
+					fmt.Scanln(&choice)
+					switch choice {
+					case "1":
+						systemStrategy = snapshot.StrategyRollbackSystem
+					case "2":
+						systemStrategy = snapshot.StrategyOverrideLocal
+					default:
+						fmt.Println("  Aborted.")
+						return nil
+					}
+				}
+			}
+		}
+
 		fmt.Printf("Restoring snapshot %s (%s)...\n", snap.ID, snap.CreatedAt.Format("2006-01-02 15:04"))
 
 		cfg, _ := config.LoadFromCwd()
@@ -152,14 +189,16 @@ var snapshotRestoreCmd = &cobra.Command{
 		})
 
 		result, err := snapshot.Restore(snap, currentScan, snapshot.RestoreOptions{
-			Cache:           c,
-			RefTracker:      refTracker,
-			PyPIClient:      pypiClient,
-			SitePackages:    envInfo.sitePackages,
-			EnvPath:         envInfo.storePath,
-			AutoDownload:    true,
-			RestoreExternal: true,
-			ProjectDir:      envInfo.projectDir,
+			Cache:              c,
+			RefTracker:         refTracker,
+			PyPIClient:         pypiClient,
+			SitePackages:       envInfo.sitePackages,
+			SystemSitePackages: systemSitePackages,
+			EnvPath:            envInfo.storePath,
+			AutoDownload:       true,
+			RestoreExternal:    true,
+			ProjectDir:         envInfo.projectDir,
+			SystemStrategy:     systemStrategy,
 		})
 		if err != nil {
 			return fmt.Errorf("restore failed: %w", err)

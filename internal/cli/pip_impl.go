@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/kartikeyyadav/fpm/internal/config"
 	"github.com/kartikeyyadav/fpm/internal/env"
 	"github.com/kartikeyyadav/fpm/internal/python"
 	"github.com/kartikeyyadav/fpm/internal/venv"
@@ -93,8 +94,26 @@ func runPipList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
+	// Check if --mutable flag is set (show pinned column)
+	showMutable, _ := cmd.Flags().GetBool("mutable")
+
+	// Build immutable lookup if needed
+	var immutableMap map[string]string
+	if showMutable {
+		immutableMap = make(map[string]string)
+		cfg, _ := config.LoadFromCwd()
+		for _, im := range cfg.Immutable.Packages {
+			normalized := strings.ReplaceAll(strings.ReplaceAll(strings.ToLower(im.Name), "-", "_"), ".", "_")
+			immutableMap[normalized] = im.Version
+		}
+	}
+
 	// Table output with colors
-	fmt.Printf("\033[1m\033[4m%-28s %-12s %-8s %s\033[0m\n", "Package", "Version", "Manager", "Location")
+	if showMutable {
+		fmt.Printf("\033[1m\033[4m%-28s %-12s %-8s %-10s %s\033[0m\n", "Package", "Version", "Manager", "Pinned", "Location")
+	} else {
+		fmt.Printf("\033[1m\033[4m%-28s %-12s %-8s %s\033[0m\n", "Package", "Version", "Manager", "Location")
+	}
 
 	for _, pkg := range packages {
 		location := pkg.Location
@@ -102,7 +121,6 @@ func runPipList(cmd *cobra.Command, args []string) error {
 			location = "..." + location[len(location)-32:]
 		}
 
-		// Color the manager name
 		mgrStr := pkg.Manager.String()
 		mgrColored := mgrStr
 		switch pkg.Manager {
@@ -118,12 +136,28 @@ func runPipList(cmd *cobra.Command, args []string) error {
 			mgrColored = "\033[2m" + mgrStr + "\033[0m"
 		}
 
-		fmt.Printf("\033[1m%-28s\033[0m \033[36m%-12s\033[0m %-8s \033[2m%s\033[0m\n",
-			pkg.Name.Raw(),
-			pkg.Version.String(),
-			mgrColored,
-			location,
-		)
+		if showMutable {
+			normalized := strings.ReplaceAll(strings.ReplaceAll(strings.ToLower(pkg.Name.Normalized()), "-", "_"), ".", "_")
+			pinnedVer, isPinned := immutableMap[normalized]
+			pinnedStr := "\033[32mmutable\033[0m"
+			if isPinned {
+				pinnedStr = fmt.Sprintf("\033[31m🔒 %s\033[0m", pinnedVer)
+			}
+			fmt.Printf("\033[1m%-28s\033[0m \033[36m%-12s\033[0m %-8s %-10s \033[2m%s\033[0m\n",
+				pkg.Name.Raw(),
+				pkg.Version.String(),
+				mgrColored,
+				pinnedStr,
+				location,
+			)
+		} else {
+			fmt.Printf("\033[1m%-28s\033[0m \033[36m%-12s\033[0m %-8s \033[2m%s\033[0m\n",
+				pkg.Name.Raw(),
+				pkg.Version.String(),
+				mgrColored,
+				location,
+			)
+		}
 	}
 
 	// Summary with counts

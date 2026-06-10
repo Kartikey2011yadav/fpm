@@ -30,5 +30,6 @@ Use --system to list from system Python (required when outside a project directo
 func init() {
 	listCmd.Flags().BoolP("all", "a", false, "Show all packages from all managers")
 	listCmd.Flags().String("manager", "", "Filter by manager (fpm, pip, uv, conda, poetry, pdm, system)")
+	listCmd.Flags().BoolP("mutable", "m", false, "Show pinned/mutable status column")
 	rootCmd.AddCommand(listCmd)
 }

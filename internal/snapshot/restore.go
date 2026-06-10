@@ -16,11 +16,12 @@ import (
 )
 
 type RestoreResult struct {
-	Restored     int
-	Downloaded   int
-	Warnings     []string
-	Errors       []string
-	DriftEntries []DriftLogEntry
+	Restored        int
+	Downloaded      int
+	Warnings        []string
+	Errors          []string
+	DriftEntries    []DriftLogEntry
+	SystemConflicts []SystemConflict
 }
 
 type DriftLogEntry struct {
@@ -55,15 +56,56 @@ func (d DriftStatus) Symbol() string {
 	}
 }
 
+type SystemConflictStrategy int
+
+const (
+	StrategyRollbackSystem  SystemConflictStrategy = iota // Also restore system packages
+	StrategyOverrideLocal                                 // Install conflicting deps at project level
+	StrategyAbort                                         // User will fix manually
+)
+
+type SystemConflict struct {
+	Package         string
+	Manager         string
+	SnapshotVersion string
+	CurrentVersion  string
+	Location        string
+}
+
 type RestoreOptions struct {
-	Cache           *cache.Cache
-	RefTracker      *cache.RefTracker
-	PyPIClient      *client.RegistryClient
-	SitePackages    string
-	EnvPath         string
-	AutoDownload    bool
-	RestoreExternal bool
-	ProjectDir      string
+	Cache              *cache.Cache
+	RefTracker         *cache.RefTracker
+	PyPIClient         *client.RegistryClient
+	SitePackages       string
+	SystemSitePackages string
+	EnvPath            string
+	AutoDownload       bool
+	RestoreExternal    bool
+	ProjectDir         string
+	SystemStrategy     SystemConflictStrategy
+}
+
+func DetectSystemConflicts(snap *Snapshot, systemScan *env.ScanResult) []SystemConflict {
+	var conflicts []SystemConflict
+	systemMap := make(map[string]env.InstalledPackage)
+	for _, pkg := range systemScan.Packages {
+		systemMap[pkg.Name.Normalized()] = pkg
+	}
+
+	for _, sp := range snap.Packages {
+		if sysPkg, exists := systemMap[sp.Name]; exists {
+			if sysPkg.Version.String() != sp.Version {
+				conflicts = append(conflicts, SystemConflict{
+					Package:         sp.Name,
+					Manager:         sp.Manager,
+					SnapshotVersion: sp.Version,
+					CurrentVersion:  sysPkg.Version.String(),
+					Location:        sysPkg.Location,
+				})
+			}
+		}
+	}
+	return conflicts
 }
 
 func Restore(snap *Snapshot, currentScan *env.ScanResult, opts RestoreOptions) (*RestoreResult, error) {
@@ -226,8 +268,24 @@ func Restore(snap *Snapshot, currentScan *env.ScanResult, opts RestoreOptions) (
 	if opts.ProjectDir != "" && snap.FpmToml != "" {
 		os.WriteFile(filepath.Join(opts.ProjectDir, "fpm.toml"), []byte(snap.FpmToml), 0644)
 	} else if opts.ProjectDir != "" && snap.FpmToml == "" {
-		// Snapshot had no fpm.toml — remove current one to match snapshot state
 		os.Remove(filepath.Join(opts.ProjectDir, "fpm.toml"))
+	}
+
+	// Handle system conflicts based on chosen strategy
+	if opts.SystemSitePackages != "" && opts.SystemStrategy != StrategyAbort {
+		systemConflicts := result.SystemConflicts
+		for _, conflict := range systemConflicts {
+			switch opts.SystemStrategy {
+			case StrategyRollbackSystem:
+				removePackageFromSitePackages(conflict.Package, opts.SystemSitePackages)
+				pkg := SnapshotPackage{Name: conflict.Package, Version: conflict.SnapshotVersion, Manager: conflict.Manager}
+				reinstallExternalPackage(pkg, opts.SystemSitePackages)
+			case StrategyOverrideLocal:
+				pkg := SnapshotPackage{Name: conflict.Package, Version: conflict.SnapshotVersion, Manager: "fpm"}
+				reinstallExternalPackage(pkg, opts.SitePackages)
+				writeInstallerFile(opts.SitePackages, conflict.Package, conflict.SnapshotVersion)
+			}
+		}
 	}
 
 	// Update current pointer
