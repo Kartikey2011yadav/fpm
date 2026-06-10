@@ -117,9 +117,6 @@ func runPipList(cmd *cobra.Command, args []string) error {
 
 	for _, pkg := range packages {
 		location := pkg.Location
-		if len(location) > 35 {
-			location = "..." + location[len(location)-32:]
-		}
 
 		mgrStr := pkg.Manager.String()
 		mgrColored := mgrStr
