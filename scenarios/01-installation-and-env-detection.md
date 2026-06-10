@@ -4,26 +4,24 @@
 
 fpm enforces clear boundaries between virtual environments and system Python.
 Unlike pip (which silently pollutes system Python), fpm requires explicit intent
-via `--system` or an active venv.
+via `--system` or being in a project directory. No activation needed — fpm
+detects your project by directory alone.
 
 ---
 
 ## Setup
 
 ```bash
-# Ensure no venv is active
-deactivate 2>/dev/null
-
-# Remove any existing test venv
-rm -rf /tmp/fpm-demo-env
-mkdir -p /tmp/fpm-demo-env && cd /tmp/fpm-demo-env
+rm -rf /tmp/fpm-demo-env /tmp/fpm-demo-outside
+mkdir -p /tmp/fpm-demo-outside && cd /tmp/fpm-demo-outside
 ```
 
 ---
 
-## Step 1: Install Without Venv (Should Fail)
+## Step 1: Install Without Venv or --system (Should Fail)
 
 ```bash
+cd /tmp/fpm-demo-outside
 fpm install requests
 ```
 
@@ -31,7 +29,9 @@ fpm install requests
 
 ```
 error: No virtual environment found
-hint: Run `fpm venv` to create an environment, or pass `--system` (`-s`)
+
+hint: Run `fpm venv` to create an environment, or pass `--system` (`-s`) to
+      install into the system Python.
 ```
 
 **Why this matters:** pip would silently install into system Python, potentially
@@ -48,45 +48,43 @@ fpm install -s requests
 **Expected Output:**
 
 ```
-Resolving dependencies...
-Downloading requests-2.x.x-py3-none-any.whl
-Installing requests 2.x.x (system)
-  + requests 2.x.x
-  + urllib3 2.x.x
-  + charset-normalizer 3.x.x
-  + idna 3.x
-  + certifi 2024.x.x
+Resolving 1 package(s)... done
+✓ requests 2.34.2
+✓ urllib3 2.7.0
+✓ charset-normalizer 3.4.7
+✓ idna 3.18
+✓ certifi 2026.5.20
+✓ Installed 5 package(s)
 ```
 
 ---
 
-## Step 3: Verify Installation
+## Step 3: Verify System Installation
 
 ```bash
-fpm list
-```
-
-**Expected:** Shows requests and its dependencies with versions.
-
-```bash
+fpm list --system
 fpm tree --system
 ```
 
-**Expected:** Tree showing requests as root with urllib3, charset-normalizer,
-idna, certifi as children.
+**Expected:** Shows requests and its dependencies in system site-packages.
 
 ---
 
-## Step 4: Create a Venv and Install There
+## Step 4: Create a Project (Auto-Detects Venv)
 
 ```bash
-fpm venv
-source .venv/bin/activate
+rm -rf /tmp/fpm-demo-env && mkdir /tmp/fpm-demo-env && cd /tmp/fpm-demo-env
+fpm init .
+```
 
+**Expected:** Creates `pyproject.toml` + `.venv`. No activation required.
+
+```bash
 fpm install flask
 ```
 
-**Expected:** Flask installs into `.venv/` without the `--system` flag.
+**Expected:** Flask installs into `.venv/` — no `--system` flag needed because
+fpm detected the project by directory.
 
 ```bash
 fpm list
@@ -99,27 +97,63 @@ fpm list
 ## Step 5: Verify Isolation
 
 ```bash
-# Venv packages don't appear in system
-fpm list --system  # should NOT show flask
+# Inside project: sees venv packages
+fpm list
+# Shows: flask, werkzeug, jinja2, click, ...
 
-# System packages don't appear in venv
-fpm list           # should NOT show requests (unless it's also in venv)
+# System packages are separate
+fpm list --system
+# Shows: requests, urllib3, certifi, ...
+
+# Leave the project directory
+cd /tmp/fpm-demo-outside
+
+# fpm no longer sees the venv
+fpm list
+# error: no virtual environment found. Use --system to list system packages
+
+# System still accessible with --system
+fpm list --system
+# Shows: requests, urllib3, certifi, ...
 ```
+
+---
+
+## Step 6: Directory-Based Detection (No Activation)
+
+```bash
+# Go back into project — venv is detected automatically
+cd /tmp/fpm-demo-env
+fpm list
+# Shows flask packages — no source .venv/bin/activate needed!
+
+# VIRTUAL_ENV env var is ignored by fpm
+export VIRTUAL_ENV="/tmp/fpm-demo-env/.venv"
+cd /tmp
+fpm list
+# error: no virtual environment found (VIRTUAL_ENV ignored)
+unset VIRTUAL_ENV
+```
+
+**Why:** fpm uses directory-based detection only (like uv's project commands).
+This prevents accidentally installing to the wrong project's venv from another
+directory.
 
 ---
 
 ## Cleanup
 
 ```bash
-deactivate
-rm -rf /tmp/fpm-demo-env
+rm -rf /tmp/fpm-demo-env /tmp/fpm-demo-outside
 fpm remove -s requests
+echo "a" | fpm autoremove --system
 ```
 
 ---
 
 ## Key Takeaway
 
-> fpm never installs into the wrong place by accident. You either activate a
-> venv or explicitly pass `--system`. This prevents the #1 source of Python
-> environment corruption.
+> fpm never installs into the wrong place by accident. You either `cd` into a
+> project directory (auto-detects `.venv`) or explicitly pass `--system`. No
+> activation needed, no VIRTUAL_ENV env var, no forgotten deactivations. Just
+> directory = environment.

@@ -4,7 +4,8 @@
 
 fpm provides a complete project lifecycle — from initialization to build and
 publish. It manages pyproject.toml, lockfiles, virtual environments, and
-dependencies as a unified workflow.
+dependencies as a unified workflow. No activation needed — just `cd` into your
+project.
 
 ---
 
@@ -28,44 +29,17 @@ cd myapp
 ```
 myapp/
 ├── pyproject.toml      # PEP 621 project metadata
-├── .venv/              # Virtual environment
+├── fpm.toml            # fpm configuration (optional)
+├── .venv/              # Virtual environment (auto-created)
 ├── .python-version     # Python version pin
 └── .fpm-depgraph.json  # Dependency graph (empty)
 ```
 
-```bash
-cat pyproject.toml
-```
-
-**Expected Output:**
-
-```toml
-[project]
-name = "myapp"
-version = "0.1.0"
-description = ""
-requires-python = ">=3.10"
-dependencies = []
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-```
+> No activation needed! Just `cd myapp` and all fpm commands target the venv.
 
 ---
 
-## Step 2: Activate Environment
-
-```bash
-source .venv/bin/activate
-python --version
-```
-
-**Expected:** Python version matches `.python-version`.
-
----
-
-## Step 3: Add Dependencies
+## Step 2: Add Dependencies
 
 ```bash
 fpm install requests flask
@@ -77,18 +51,16 @@ fpm install requests flask
 cat pyproject.toml | grep -A5 "dependencies"
 ```
 
-**Expected:**
-
 ```toml
 dependencies = [
-    "requests>=2.31.0",
-    "flask>=3.0.0",
+    "requests>=2.34.2",
+    "flask>=3.1.3",
 ]
 ```
 
 ---
 
-## Step 4: Add Development Dependencies
+## Step 3: Add Development Dependencies
 
 ```bash
 fpm install --dev pytest black mypy
@@ -104,6 +76,23 @@ dev = [
     "mypy>=1.0",
 ]
 ```
+
+---
+
+## Step 4: Configure Immutable Pins
+
+```bash
+cat > fpm.toml << 'EOF'
+[project]
+name = "myapp"
+requires-python = ">=3.10"
+dependencies = []
+[immutable]
+packages = [{ name = "requests", version = "2.34.2" }]
+EOF
+```
+
+Now `requests` can never be changed from 2.34.2, regardless of what anyone runs.
 
 ---
 
@@ -131,9 +120,33 @@ fpm run python -c "from myapp import get_status; print(get_status('https://httpb
 
 **Expected:** `200`
 
+> `fpm run` handles PATH and environment — no manual activation needed.
+
 ---
 
-## Step 7: Generate Lockfile
+## Step 7: Check Package Status
+
+```bash
+# See all packages with mutable/immutable status
+fpm list --mutable
+
+# See dependency tree
+fpm tree
+```
+
+**Expected:**
+
+```
+Package         Version    Manager  Pinned      Location
+requests        2.34.2     fpm      🔒 2.34.2   .venv/...
+flask           3.1.3      fpm      mutable     .venv/...
+certifi         2026.5.20  fpm      mutable     .venv/...
+...
+```
+
+---
+
+## Step 8: Generate Lockfile
 
 ```bash
 fpm lock
@@ -144,15 +157,17 @@ cat fpm.lock | head -20
 
 ---
 
-## Step 8: Snapshot Before Experiment
+## Step 9: Snapshot Before Experiment
 
 ```bash
 fpm snapshot create "stable baseline v0.1"
 ```
 
+This captures: all packages, all versions, AND your fpm.toml config.
+
 ---
 
-## Step 9: Experiment With New Dependencies
+## Step 10: Experiment With New Dependencies
 
 ```bash
 fpm install pandas numpy
@@ -161,18 +176,30 @@ fpm run python -c "import pandas; print(pandas.__version__)"
 
 ---
 
-## Step 10: Decide Experiment Failed — Rollback
+## Step 11: Experiment Failed — Rollback
 
 ```bash
-fpm snapshot restore <baseline-id>
+SNAP_ID=$(fpm snapshot list | grep baseline | grep -oE "[0-9]{8}-[0-9]{6}-[0-9]+" | head -1)
+fpm snapshot restore "$SNAP_ID"
 fpm list
 ```
 
-**Expected:** pandas and numpy gone. Only requests and flask remain.
+**Expected:** pandas and numpy gone. Only requests and flask remain. fpm.toml is
+also restored to its original state.
 
 ---
 
-## Step 11: Build the Package
+## Step 12: Audit for Vulnerabilities
+
+```bash
+fpm audit
+```
+
+**Expected:** Scans all packages against OSV database, reports any CVEs.
+
+---
+
+## Step 13: Build the Package
 
 ```bash
 fpm build
@@ -188,7 +215,7 @@ Building myapp 0.1.0...
 
 ---
 
-## Step 12: Full CI Reproduction
+## Step 14: Full CI Reproduction
 
 ```bash
 # Simulate CI: fresh clone with only lockfile
@@ -200,14 +227,13 @@ cp /tmp/fpm-demo-project/myapp/pyproject.toml .
 cp /tmp/fpm-demo-project/myapp/fpm.lock .
 cp -r /tmp/fpm-demo-project/myapp/src .
 
-# Reproduce exact environment
+# Reproduce exact environment (no activation needed)
 fpm venv
-source .venv/bin/activate
 fpm sync
 
 # Verify
 fpm list
-python -c "from myapp import get_status; print('Import OK')"
+fpm run python -c "from myapp import get_status; print('Import OK')"
 ```
 
 **Expected:** Exact same versions as the original environment. Fully
@@ -215,27 +241,12 @@ reproducible.
 
 ---
 
-## Step 13: Configuration
+## Step 15: Repair and Diagnostics
 
 ```bash
-fpm config show
-```
-
-**Expected Output:**
-
-```
-Configuration:
-  cross-manager-policy: ask
-  link-mode: auto (reflink on APFS)
-  concurrency: 50
-  cache-dir: ~/.cache/fpm
-  data-dir: ~/.local/share/fpm
-
-Project:
-  python: 3.12.0
-  venv: .venv
-  lockfile: fpm.lock
-  immutable: (none)
+fpm config show     # View all configuration
+fpm repair          # Check installation health
+fpm cache size      # See cache disk usage
 ```
 
 ---
@@ -245,7 +256,6 @@ Project:
 ```bash
 # Day 1: Start project
 fpm init myapp && cd myapp
-source .venv/bin/activate
 fpm install requests flask
 fpm install --dev pytest
 fpm lock
@@ -265,8 +275,9 @@ fpm audit          # check for vulns
 fpm build          # create wheel
 fpm publish        # upload to PyPI
 
-# CI: Reproduce exactly
+# CI: Reproduce exactly (no activation needed)
 fpm venv && fpm sync
+fpm run pytest
 ```
 
 ---
@@ -274,7 +285,6 @@ fpm venv && fpm sync
 ## Cleanup
 
 ```bash
-deactivate
 rm -rf /tmp/fpm-demo-project /tmp/myapp-ci
 ```
 
@@ -283,6 +293,7 @@ rm -rf /tmp/fpm-demo-project /tmp/myapp-ci
 ## Key Takeaway
 
 > fpm provides the complete project lifecycle in one tool: init, install, lock,
-> snapshot, audit, build, publish. Every step is reproducible and reversible.
-> Combined with snapshots and immutable pins, you get a workflow that's both
-> fast to develop with and safe to deploy from.
+> snapshot, audit, build, publish. No activation needed — just `cd` into your
+> project. Every step is reproducible and reversible. Combined with snapshots,
+> immutable pins, and the `--mutable` flag for visibility, you get a workflow
+> that's both fast to develop with and safe to deploy from.

@@ -28,11 +28,11 @@ fpm --version
 | 1   | [Installation & Environment Detection](01-installation-and-env-detection.md)     | fpm enforces venv/system boundaries, prevents accidental system pollution |
 | 2   | [Dependency Graph & Intelligent Cleanup](02-dependency-graph-and-cleanup.md)     | fpm tracks requested vs transitive deps, enables smart autoremove         |
 | 3   | [Immutable Package Pinning](03-immutable-packages.md)                            | Production-grade version locks that block conflicting installs            |
-| 4   | [Snapshots & Rollback](04-snapshots-and-rollback.md)                             | Git-like environment history with instant restore                         |
+| 4   | [Snapshots & Rollback](04-snapshots-and-rollback.md)                             | Full-fidelity restore: all packages, all managers, config included        |
 | 5   | [Cross-Manager Awareness](05-cross-manager-awareness.md)                         | fpm sees packages from pip/uv/conda/poetry and handles conflicts          |
 | 6   | [Conflict Resolution Policies](06-conflict-resolution.md)                        | Three strategies (ask/install/skip) for cross-manager conflicts           |
 | 7   | [Content-Addressable Storage & Zero Duplication](07-cas-and-zero-duplication.md) | One copy on disk shared across projects via reflinks                      |
-| 8   | [Lockfile & Reproducible Environments](08-lockfile-and-sync.md)                  | Deterministic installs across machines                                    |
+| 8   | [Lockfile & Reproducible Environments](08-lockfile-and-sync.md)                  | Deterministic installs via fpm lock + fpm sync                            |
 | 9   | [Vulnerability Auditing](09-vulnerability-audit.md)                              | Scan all packages (any manager) against OSV database                      |
 | 10  | [Cache Management & Garbage Collection](10-cache-management.md)                  | Reference-tracked GC that only removes truly unused packages              |
 | 11  | [Error UX & Helpful Hints](11-error-ux.md)                                       | Typo correction, clear diagnostics, actionable suggestions                |
