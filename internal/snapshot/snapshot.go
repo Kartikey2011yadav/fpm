@@ -25,6 +25,7 @@ type Snapshot struct {
 	PythonPath    string            `json:"python_path"`
 	PathOrder     []string          `json:"path_order"`
 	Packages      []SnapshotPackage `json:"packages"`
+	FpmToml       string            `json:"fpm_toml,omitempty"`
 }
 
 type SnapshotPackage struct {
@@ -58,7 +59,7 @@ func NewStore(envPath string) *Store {
 	return &Store{dir: storeDir}
 }
 
-func (s *Store) Capture(scanResult *env.ScanResult, pythonVersion, pythonPath string, pathOrder []string, message string) (*Snapshot, error) {
+func (s *Store) Capture(scanResult *env.ScanResult, pythonVersion, pythonPath string, pathOrder []string, message string, projectDir string) (*Snapshot, error) {
 	if err := os.MkdirAll(s.dir, 0755); err != nil {
 		return nil, err
 	}
@@ -70,6 +71,13 @@ func (s *Store) Capture(scanResult *env.ScanResult, pythonVersion, pythonPath st
 		PythonVersion: pythonVersion,
 		PythonPath:    pythonPath,
 		PathOrder:     pathOrder,
+	}
+
+	// Capture fpm.toml if it exists in the project
+	if projectDir != "" {
+		if data, err := os.ReadFile(filepath.Join(projectDir, "fpm.toml")); err == nil {
+			snap.FpmToml = string(data)
+		}
 	}
 
 	// Capture ALL packages from all managers
@@ -101,7 +109,7 @@ func (s *Store) Capture(scanResult *env.ScanResult, pythonVersion, pythonPath st
 	return snap, nil
 }
 
-func (s *Store) CaptureWithCAS(scanResult *env.ScanResult, refTracker *cache.RefTracker, pythonVersion, pythonPath string, pathOrder []string, message string) (*Snapshot, error) {
+func (s *Store) CaptureWithCAS(scanResult *env.ScanResult, refTracker *cache.RefTracker, pythonVersion, pythonPath string, pathOrder []string, message string, projectDir string) (*Snapshot, error) {
 	if err := os.MkdirAll(s.dir, 0755); err != nil {
 		return nil, err
 	}
@@ -115,6 +123,13 @@ func (s *Store) CaptureWithCAS(scanResult *env.ScanResult, refTracker *cache.Ref
 		PathOrder:     pathOrder,
 	}
 
+	// Capture fpm.toml if it exists in the project
+	if projectDir != "" {
+		if data, err := os.ReadFile(filepath.Join(projectDir, "fpm.toml")); err == nil {
+			snap.FpmToml = string(data)
+		}
+	}
+
 	for _, pkg := range scanResult.Packages {
 		sp := SnapshotPackage{
 			Name:     pkg.Name.Normalized(),
@@ -122,10 +137,7 @@ func (s *Store) CaptureWithCAS(scanResult *env.ScanResult, refTracker *cache.Ref
 			Manager:  pkg.Manager.String(),
 			Location: pkg.Location,
 		}
-		// For fpm packages, include CAS key for precise restoration
 		if pkg.Manager == env.ManagerFpm {
-			// CAS key would be looked up from reference tracker
-			// This enables exact restoration later
 			sp.CASKey = lookupCASKey(refTracker, pkg.Name, pkg.Version)
 		}
 		snap.Packages = append(snap.Packages, sp)

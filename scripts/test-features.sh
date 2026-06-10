@@ -316,8 +316,8 @@ if should_run "crossmanager"; then
     # Ensure pip package exists for testing
     pip install six --trusted-host pypi.org --trusted-host files.pythonhosted.org -q 2>/dev/null || true
 
-    # Install a different package via fpm so we have both managers represented
-    fpm install -s markupsafe >/dev/null 2>&1
+    # Install a package via fpm that pip doesn't already have
+    fpm install -s chardet >/dev/null 2>&1
 
     # Detect pip-installed package
     OUT=$(fpm install -s six 2>&1)
@@ -338,7 +338,7 @@ if should_run "crossmanager"; then
     fpm list -a --system 2>/dev/null | grep -q "fpm" && pass "filter by fpm manager" || fail "filter fpm"
 
     # Cleanup
-    fpm remove -s markupsafe >/dev/null 2>&1
+    fpm remove -s chardet >/dev/null 2>&1
 fi
 
 if should_run "immutable"; then

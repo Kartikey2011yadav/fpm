@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -55,12 +56,14 @@ func (d DriftStatus) Symbol() string {
 }
 
 type RestoreOptions struct {
-	Cache        *cache.Cache
-	RefTracker   *cache.RefTracker
-	PyPIClient   *client.RegistryClient
-	SitePackages string
-	EnvPath      string
-	AutoDownload bool
+	Cache           *cache.Cache
+	RefTracker      *cache.RefTracker
+	PyPIClient      *client.RegistryClient
+	SitePackages    string
+	EnvPath         string
+	AutoDownload    bool
+	RestoreExternal bool
+	ProjectDir      string
 }
 
 func Restore(snap *Snapshot, currentScan *env.ScanResult, opts RestoreOptions) (*RestoreResult, error) {
@@ -92,6 +95,7 @@ func Restore(snap *Snapshot, currentScan *env.ScanResult, opts RestoreOptions) (
 				casPath, err := opts.Cache.Retrieve(casKey)
 				if err == nil {
 					if err := fs.LinkDir(casPath, opts.SitePackages, fs.LinkModeAuto); err == nil {
+						writeInstallerFile(opts.SitePackages, pkg.Name, pkg.Version)
 						opts.RefTracker.AddReference(opts.EnvPath, casKey, pkg.Name, pkg.Version)
 						result.Restored++
 						restored = true
@@ -126,56 +130,104 @@ func Restore(snap *Snapshot, currentScan *env.ScanResult, opts RestoreOptions) (
 		}
 	}
 
-	// Detailed drift log for external packages
+	// Build maps for comparison
 	currentMap := make(map[string]env.InstalledPackage)
 	for _, pkg := range currentScan.Packages {
 		currentMap[pkg.Name.Normalized()] = pkg
 	}
 
-	for _, pkg := range externalPackages {
-		current, exists := currentMap[pkg.Name]
-		if !exists {
-			result.DriftEntries = append(result.DriftEntries, DriftLogEntry{
-				Package:  pkg.Name,
-				Manager:  pkg.Manager,
-				Expected: pkg.Version,
-				Actual:   "(missing)",
-				Status:   DriftMissing,
-			})
-		} else if current.Version.String() != pkg.Version {
-			result.DriftEntries = append(result.DriftEntries, DriftLogEntry{
-				Package:  pkg.Name,
-				Manager:  pkg.Manager,
-				Expected: pkg.Version,
-				Actual:   current.Version.String(),
-				Status:   DriftChanged,
-			})
-		} else {
-			result.DriftEntries = append(result.DriftEntries, DriftLogEntry{
-				Package:  pkg.Name,
-				Manager:  pkg.Manager,
-				Expected: pkg.Version,
-				Actual:   current.Version.String(),
-				Status:   DriftMatch,
-			})
-		}
-	}
-
-	// Detect new packages not in snapshot
 	snapshotNames := make(map[string]bool)
 	for _, p := range snap.Packages {
 		snapshotNames[p.Name] = true
 	}
-	for _, pkg := range currentScan.Packages {
-		if !snapshotNames[pkg.Name.Normalized()] {
-			result.DriftEntries = append(result.DriftEntries, DriftLogEntry{
-				Package:  pkg.Name.Normalized(),
-				Manager:  pkg.Manager.String(),
-				Expected: "(not in snapshot)",
-				Actual:   pkg.Version.String(),
-				Status:   DriftNew,
-			})
+
+	// Handle external packages
+	if opts.RestoreExternal {
+		// Remove packages that exist now but were NOT in the snapshot
+		for _, pkg := range currentScan.Packages {
+			if !snapshotNames[pkg.Name.Normalized()] && pkg.Manager != env.ManagerFpm {
+				if err := removePackageFromSitePackages(pkg.Name.Normalized(), opts.SitePackages); err == nil {
+					result.DriftEntries = append(result.DriftEntries, DriftLogEntry{
+						Package:  pkg.Name.Normalized(),
+						Manager:  pkg.Manager.String(),
+						Expected: "(not in snapshot)",
+						Actual:   pkg.Version.String(),
+						Status:   DriftNew,
+					})
+				}
+			}
 		}
+
+		// Restore external packages that are missing or have wrong version
+		for _, pkg := range externalPackages {
+			current, exists := currentMap[pkg.Name]
+			if !exists {
+				// Missing — reinstall
+				if err := reinstallExternalPackage(pkg, opts.SitePackages); err != nil {
+					result.Errors = append(result.Errors,
+						fmt.Sprintf("%s %s (%s): reinstall failed: %v", pkg.Name, pkg.Version, pkg.Manager, err))
+				} else {
+					result.DriftEntries = append(result.DriftEntries, DriftLogEntry{
+						Package: pkg.Name, Manager: pkg.Manager,
+						Expected: pkg.Version, Actual: "(restored)", Status: DriftMissing,
+					})
+				}
+			} else if current.Version.String() != pkg.Version {
+				// Wrong version — remove and reinstall correct version
+				removePackageFromSitePackages(pkg.Name, opts.SitePackages)
+				if err := reinstallExternalPackage(pkg, opts.SitePackages); err != nil {
+					result.Errors = append(result.Errors,
+						fmt.Sprintf("%s: revert %s→%s failed: %v", pkg.Name, current.Version.String(), pkg.Version, err))
+				} else {
+					result.DriftEntries = append(result.DriftEntries, DriftLogEntry{
+						Package: pkg.Name, Manager: pkg.Manager,
+						Expected: pkg.Version, Actual: current.Version.String(), Status: DriftChanged,
+					})
+				}
+			} else {
+				result.DriftEntries = append(result.DriftEntries, DriftLogEntry{
+					Package: pkg.Name, Manager: pkg.Manager,
+					Expected: pkg.Version, Actual: current.Version.String(), Status: DriftMatch,
+				})
+			}
+		}
+	} else {
+		// Legacy: just log drift without restoring
+		for _, pkg := range externalPackages {
+			current, exists := currentMap[pkg.Name]
+			if !exists {
+				result.DriftEntries = append(result.DriftEntries, DriftLogEntry{
+					Package: pkg.Name, Manager: pkg.Manager,
+					Expected: pkg.Version, Actual: "(missing)", Status: DriftMissing,
+				})
+			} else if current.Version.String() != pkg.Version {
+				result.DriftEntries = append(result.DriftEntries, DriftLogEntry{
+					Package: pkg.Name, Manager: pkg.Manager,
+					Expected: pkg.Version, Actual: current.Version.String(), Status: DriftChanged,
+				})
+			} else {
+				result.DriftEntries = append(result.DriftEntries, DriftLogEntry{
+					Package: pkg.Name, Manager: pkg.Manager,
+					Expected: pkg.Version, Actual: current.Version.String(), Status: DriftMatch,
+				})
+			}
+		}
+		for _, pkg := range currentScan.Packages {
+			if !snapshotNames[pkg.Name.Normalized()] {
+				result.DriftEntries = append(result.DriftEntries, DriftLogEntry{
+					Package: pkg.Name.Normalized(), Manager: pkg.Manager.String(),
+					Expected: "(not in snapshot)", Actual: pkg.Version.String(), Status: DriftNew,
+				})
+			}
+		}
+	}
+
+	// Restore fpm.toml if snapshot captured it
+	if opts.ProjectDir != "" && snap.FpmToml != "" {
+		os.WriteFile(filepath.Join(opts.ProjectDir, "fpm.toml"), []byte(snap.FpmToml), 0644)
+	} else if opts.ProjectDir != "" && snap.FpmToml == "" {
+		// Snapshot had no fpm.toml — remove current one to match snapshot state
+		os.Remove(filepath.Join(opts.ProjectDir, "fpm.toml"))
 	}
 
 	// Update current pointer
@@ -188,14 +240,12 @@ func Restore(snap *Snapshot, currentScan *env.ScanResult, opts RestoreOptions) (
 func redownloadPackage(pkg SnapshotPackage, opts RestoreOptions) error {
 	ctx := context.Background()
 
-	// Fetch package versions from PyPI
 	pkgName := types.NewPackageName(pkg.Name)
 	detail, err := opts.PyPIClient.FetchPackageVersions(ctx, pkgName)
 	if err != nil {
 		return fmt.Errorf("failed to fetch from PyPI: %w", err)
 	}
 
-	// Find the exact version's wheel
 	for _, file := range detail.Files {
 		if !strings.HasSuffix(file.Filename, ".whl") {
 			continue
@@ -204,7 +254,6 @@ func redownloadPackage(pkg SnapshotPackage, opts RestoreOptions) error {
 			continue
 		}
 
-		// Download wheel
 		wheelPath := filepath.Join(opts.Cache.WheelsDir(), file.Filename)
 		if _, err := os.Stat(wheelPath); err != nil {
 			if err := opts.PyPIClient.DownloadWheel(ctx, file, wheelPath); err != nil {
@@ -212,24 +261,40 @@ func redownloadPackage(pkg SnapshotPackage, opts RestoreOptions) error {
 			}
 		}
 
-		// Store in CAS
 		casKey, err := opts.Cache.Store(wheelPath)
 		if err != nil {
 			return err
 		}
 
-		// Link to site-packages
 		casPath, _ := opts.Cache.Retrieve(casKey)
 		if err := fs.LinkDir(casPath, opts.SitePackages, fs.LinkModeAuto); err != nil {
 			return err
 		}
 
-		// Track reference
+		// Write INSTALLER file to mark as fpm-managed
+		writeInstallerFile(opts.SitePackages, pkg.Name, pkg.Version)
+
 		opts.RefTracker.AddReference(opts.EnvPath, casKey, pkg.Name, pkg.Version)
 		return nil
 	}
 
 	return fmt.Errorf("no compatible wheel found for %s %s", pkg.Name, pkg.Version)
+}
+
+func writeInstallerFile(sitePackages, name, version string) {
+	entries, _ := os.ReadDir(sitePackages)
+	normalized := strings.ReplaceAll(strings.ReplaceAll(strings.ToLower(name), "-", "_"), ".", "_")
+	for _, entry := range entries {
+		if !entry.IsDir() || !strings.HasSuffix(entry.Name(), ".dist-info") {
+			continue
+		}
+		entryName := strings.ReplaceAll(strings.ReplaceAll(strings.ToLower(entry.Name()), "-", "_"), ".", "_")
+		if strings.HasPrefix(entryName, normalized+"_") {
+			installerPath := filepath.Join(sitePackages, entry.Name(), "INSTALLER")
+			os.WriteFile(installerPath, []byte("fpm\n"), 0644)
+			return
+		}
+	}
 }
 
 func (r *RestoreResult) PrintLog() {
@@ -321,4 +386,35 @@ func distInfoToPackageDir(distInfoName string) string {
 		return ""
 	}
 	return distInfoName[:idx]
+}
+
+func removePackageFromSitePackages(name string, sitePackages string) error {
+	entries, err := os.ReadDir(sitePackages)
+	if err != nil {
+		return err
+	}
+	normalized := strings.ReplaceAll(strings.ToLower(name), "-", "_")
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		entryLower := strings.ToLower(entry.Name())
+		entryNorm := strings.ReplaceAll(entryLower, "-", "_")
+		if strings.HasSuffix(entryLower, ".dist-info") {
+			pkg := distInfoToPackageDir(entryNorm)
+			if pkg == normalized {
+				os.RemoveAll(filepath.Join(sitePackages, entry.Name()))
+			}
+		} else if entryNorm == normalized {
+			os.RemoveAll(filepath.Join(sitePackages, entry.Name()))
+		}
+	}
+	return nil
+}
+
+func reinstallExternalPackage(pkg SnapshotPackage, sitePackages string) error {
+	cmd := exec.Command("pip", "install", "--target", sitePackages,
+		"--no-deps", "--quiet", fmt.Sprintf("%s==%s", pkg.Name, pkg.Version))
+	cmd.Env = append(os.Environ(), "PIP_DISABLE_PIP_VERSION_CHECK=1")
+	return cmd.Run()
 }

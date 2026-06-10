@@ -19,7 +19,7 @@ func TestSnapshotCaptureAndRetrieve(t *testing.T) {
 		},
 	}
 
-	snap, err := store.Capture(scanResult, "3.11.8", "/usr/bin/python3", []string{"/site-packages"}, "test snapshot")
+	snap, err := store.Capture(scanResult, "3.11.8", "/usr/bin/python3", []string{"/site-packages"}, "test snapshot", "")
 	if err != nil {
 		t.Fatalf("Capture failed: %v", err)
 	}
@@ -52,8 +52,8 @@ func TestSnapshotList(t *testing.T) {
 		{Name: types.NewPackageName("pkg1"), Version: mustParse("1.0.0"), Manager: env.ManagerFpm},
 	}}
 
-	store.Capture(scanResult, "3.11", "/usr/bin/python3", nil, "first")
-	store.Capture(scanResult, "3.11", "/usr/bin/python3", nil, "second")
+	store.Capture(scanResult, "3.11", "/usr/bin/python3", nil, "first", "")
+	store.Capture(scanResult, "3.11", "/usr/bin/python3", nil, "second", "")
 
 	list, err := store.List()
 	if err != nil {
@@ -103,7 +103,7 @@ func TestSnapshotDelete(t *testing.T) {
 	store := &Store{dir: tmpDir}
 
 	scanResult := &env.ScanResult{Packages: nil}
-	snap, _ := store.Capture(scanResult, "3.11", "/usr/bin/python3", nil, "to delete")
+	snap, _ := store.Capture(scanResult, "3.11", "/usr/bin/python3", nil, "to delete", "")
 
 	err := store.Delete(snap.ID)
 	if err != nil {

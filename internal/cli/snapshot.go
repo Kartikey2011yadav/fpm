@@ -3,9 +3,14 @@ package cli
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/kartikeyyadav/fpm/internal/cache"
+	"github.com/kartikeyyadav/fpm/internal/client"
+	"github.com/kartikeyyadav/fpm/internal/config"
 	"github.com/kartikeyyadav/fpm/internal/env"
+	"github.com/kartikeyyadav/fpm/internal/python"
 	"github.com/kartikeyyadav/fpm/internal/snapshot"
 	"github.com/kartikeyyadav/fpm/internal/venv"
 	"github.com/spf13/cobra"
@@ -29,8 +34,8 @@ Think of it as git for your Python environment.`,
 }
 
 var snapshotCreateCmd = &cobra.Command{
-	Use:   "create [message]",
-	Short: "Capture the current environment state",
+	Use:     "create [message]",
+	Short:   "Capture the current environment state",
 	Aliases: []string{"save"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		message := ""
@@ -38,30 +43,16 @@ var snapshotCreateCmd = &cobra.Command{
 			message = strings.Join(args, " ")
 		}
 
-		cwd, _ := os.Getwd()
-		activeVenv, err := venv.Detect(cwd)
+		envInfo, err := resolveSnapshotEnv()
 		if err != nil {
-			return fmt.Errorf("no virtual environment found")
+			return err
 		}
 
-		// Scan full environment (all managers)
-		allDirs := env.FindSitePackagesDirs(activeVenv.Interpreter.SysPaths)
-		if activeVenv.SitePackages != "" {
-			allDirs = append([]string{activeVenv.SitePackages}, allDirs...)
-		}
-		scanner := env.NewScanner(allDirs)
+		scanner := env.NewScanner(envInfo.dirs)
 		scanResult, _ := scanner.Scan()
 
-		// Get Python info
-		pythonVersion := ""
-		pythonPath := ""
-		if activeVenv.Interpreter != nil {
-			pythonVersion = activeVenv.Interpreter.VersionString()
-			pythonPath = activeVenv.Interpreter.Path
-		}
-
-		store := snapshot.NewStore(activeVenv.Path)
-		snap, err := store.Capture(scanResult, pythonVersion, pythonPath, allDirs, message)
+		store := snapshot.NewStore(envInfo.storePath)
+		snap, err := store.Capture(scanResult, envInfo.pythonVersion, envInfo.pythonPath, envInfo.dirs, message, envInfo.projectDir)
 		if err != nil {
 			return fmt.Errorf("failed to create snapshot: %w", err)
 		}
@@ -82,17 +73,16 @@ var snapshotCreateCmd = &cobra.Command{
 }
 
 var snapshotListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "Show all environment snapshots",
+	Use:     "list",
+	Short:   "Show all environment snapshots",
 	Aliases: []string{"log"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cwd, _ := os.Getwd()
-		activeVenv, err := venv.Detect(cwd)
+		envInfo, err := resolveSnapshotEnv()
 		if err != nil {
-			return fmt.Errorf("no virtual environment found")
+			return err
 		}
 
-		store := snapshot.NewStore(activeVenv.Path)
+		store := snapshot.NewStore(envInfo.storePath)
 		snapshots, err := store.List()
 		if err != nil || len(snapshots) == 0 {
 			fmt.Println("No snapshots found. Run 'fpm snapshot create' to take one.")
@@ -136,55 +126,46 @@ var snapshotRestoreCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		snapID := args[0]
 
-		cwd, _ := os.Getwd()
-		activeVenv, err := venv.Detect(cwd)
+		envInfo, err := resolveSnapshotEnv()
 		if err != nil {
-			return fmt.Errorf("no virtual environment found")
+			return err
 		}
 
-		store := snapshot.NewStore(activeVenv.Path)
+		store := snapshot.NewStore(envInfo.storePath)
 		snap, err := store.Get(snapID)
 		if err != nil {
 			return fmt.Errorf("snapshot %q not found", snapID)
 		}
 
-		// Scan current state for drift detection
-		allDirs := env.FindSitePackagesDirs(activeVenv.Interpreter.SysPaths)
-		if activeVenv.SitePackages != "" {
-			allDirs = append([]string{activeVenv.SitePackages}, allDirs...)
-		}
-		scanner := env.NewScanner(allDirs)
+		scanner := env.NewScanner(envInfo.dirs)
 		currentScan, _ := scanner.Scan()
-
-		// Detect drift
-		report, _ := store.DetectDrift(snapID, currentScan)
 
 		fmt.Printf("Restoring snapshot %s (%s)...\n", snap.ID, snap.CreatedAt.Format("2006-01-02 15:04"))
 
-		// Report drift for non-fpm packages
-		if report != nil {
-			if len(report.Drifted) > 0 {
-				fmt.Println("\n  Drift detected in external packages:")
-				for _, d := range report.Drifted {
-					fmt.Printf("    ⚠ %s: was %s (%s) → now %s\n",
-						d.Package.Name, d.Package.Version, d.Package.Manager, d.CurrentVersion)
-				}
-			}
-			if len(report.Missing) > 0 {
-				fmt.Println("\n  Missing from current environment:")
-				for _, m := range report.Missing {
-					fmt.Printf("    ✗ %s %s (%s)\n", m.Name, m.Version, m.Manager)
-				}
-			}
+		cfg, _ := config.LoadFromCwd()
+		c := cache.New(cfg.Cache.Dir)
+		refTracker := cache.NewRefTracker(c)
+		pypiClient := client.New(client.ClientOptions{
+			Indexes:  cfg.Indexes,
+			CacheDir: filepath.Join(cfg.Cache.Dir, "http"),
+			Network:  cfg.Network,
+		})
+
+		result, err := snapshot.Restore(snap, currentScan, snapshot.RestoreOptions{
+			Cache:           c,
+			RefTracker:      refTracker,
+			PyPIClient:      pypiClient,
+			SitePackages:    envInfo.sitePackages,
+			EnvPath:         envInfo.storePath,
+			AutoDownload:    true,
+			RestoreExternal: true,
+			ProjectDir:      envInfo.projectDir,
+		})
+		if err != nil {
+			return fmt.Errorf("restore failed: %w", err)
 		}
 
-		// For fpm packages, we'd do actual restoration here via CAS
-		fpmCount := countByManager(snap.Packages, "fpm")
-		if fpmCount > 0 {
-			fmt.Printf("\n  ✓ Restored %d fpm-managed packages from cache\n", fpmCount)
-		}
-
-		store.SetCurrent(snap.ID)
+		result.PrintLog()
 		fmt.Printf("\nEnvironment restored to snapshot %s.\n", snap.ID)
 		return nil
 	},
@@ -195,13 +176,12 @@ var snapshotDiffCmd = &cobra.Command{
 	Short: "Compare two snapshots (or snapshot vs current)",
 	Args:  cobra.RangeArgs(1, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cwd, _ := os.Getwd()
-		activeVenv, err := venv.Detect(cwd)
+		envInfo, err := resolveSnapshotEnv()
 		if err != nil {
-			return fmt.Errorf("no virtual environment found")
+			return err
 		}
 
-		store := snapshot.NewStore(activeVenv.Path)
+		store := snapshot.NewStore(envInfo.storePath)
 
 		var diff *snapshot.SnapshotDiff
 		if len(args) == 2 {
@@ -211,21 +191,14 @@ var snapshotDiffCmd = &cobra.Command{
 			}
 			fmt.Printf("Diff: %s → %s\n\n", args[0], args[1])
 		} else {
-			// Compare snapshot against current environment
 			snap, err := store.Get(args[0])
 			if err != nil {
 				return fmt.Errorf("snapshot %q not found", args[0])
 			}
 
-			// Scan current
-			allDirs := env.FindSitePackagesDirs(activeVenv.Interpreter.SysPaths)
-			if activeVenv.SitePackages != "" {
-				allDirs = append([]string{activeVenv.SitePackages}, allDirs...)
-			}
-			scanner := env.NewScanner(allDirs)
+			scanner := env.NewScanner(envInfo.dirs)
 			currentScan, _ := scanner.Scan()
 
-			// Build a snapshot from current state for comparison
 			currentSnap := &snapshot.Snapshot{}
 			for _, pkg := range currentScan.Packages {
 				currentSnap.Packages = append(currentSnap.Packages, snapshot.SnapshotPackage{
@@ -262,13 +235,12 @@ var snapshotDeleteCmd = &cobra.Command{
 	Short: "Delete a snapshot",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cwd, _ := os.Getwd()
-		activeVenv, err := venv.Detect(cwd)
+		envInfo, err := resolveSnapshotEnv()
 		if err != nil {
-			return fmt.Errorf("no virtual environment found")
+			return err
 		}
 
-		store := snapshot.NewStore(activeVenv.Path)
+		store := snapshot.NewStore(envInfo.storePath)
 		if err := store.Delete(args[0]); err != nil {
 			return fmt.Errorf("failed to delete snapshot: %w", err)
 		}
@@ -285,6 +257,74 @@ func init() {
 	snapshotCmd.AddCommand(snapshotDiffCmd)
 	snapshotCmd.AddCommand(snapshotDeleteCmd)
 	rootCmd.AddCommand(snapshotCmd)
+}
+
+type snapshotEnvInfo struct {
+	storePath     string
+	sitePackages  string
+	dirs          []string
+	pythonVersion string
+	pythonPath    string
+	projectDir    string
+}
+
+func resolveSnapshotEnv() (*snapshotEnvInfo, error) {
+	cwd, _ := os.Getwd()
+
+	if flagSystem {
+		finder := python.NewFinder()
+		interp, err := finder.FindBest("")
+		if err != nil {
+			return nil, fmt.Errorf("no Python found for system snapshots")
+		}
+		sysDirs := env.FindSitePackagesDirs(interp.SysPaths)
+		sitePackages := interp.SitePackages
+		if sitePackages == "" {
+			for _, p := range interp.SysPaths {
+				if strings.Contains(p, "site-packages") || strings.Contains(p, "dist-packages") {
+					sitePackages = p
+					break
+				}
+			}
+		}
+		return &snapshotEnvInfo{
+			storePath:     "global",
+			sitePackages:  sitePackages,
+			dirs:          sysDirs,
+			pythonVersion: interp.VersionString(),
+			pythonPath:    interp.Path,
+			projectDir:    "",
+		}, nil
+	}
+
+	activeVenv, err := venv.Detect(cwd)
+	if err != nil {
+		return nil, fmt.Errorf("no virtual environment found. Use --system for system-level snapshots")
+	}
+
+	allDirs := []string{}
+	if activeVenv.SitePackages != "" {
+		allDirs = append(allDirs, activeVenv.SitePackages)
+	}
+	if activeVenv.Interpreter != nil {
+		allDirs = append(allDirs, env.FindSitePackagesDirs(activeVenv.Interpreter.SysPaths)...)
+	}
+
+	pythonVersion := ""
+	pythonPath := ""
+	if activeVenv.Interpreter != nil {
+		pythonVersion = activeVenv.Interpreter.VersionString()
+		pythonPath = activeVenv.Interpreter.Path
+	}
+
+	return &snapshotEnvInfo{
+		storePath:     activeVenv.Path,
+		sitePackages:  activeVenv.SitePackages,
+		dirs:          allDirs,
+		pythonVersion: pythonVersion,
+		pythonPath:    pythonPath,
+		projectDir:    cwd,
+	}, nil
 }
 
 func countByManager(packages []snapshot.SnapshotPackage, manager string) int {
