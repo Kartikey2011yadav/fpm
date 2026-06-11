@@ -41,7 +41,12 @@ Find and remove orphaned packages not required by anything else.
 
 List installed packages with manager attribution. Alias: `fpm ls`.
 
-- `--all` — include system packages
+Must be run from a project directory (with `.venv`) or with `--system`.
+
+- `--all`, `-a` — include packages from all managers (pip, uv, conda, etc.)
+- `--system`, `-s` — list system Python packages (required when outside a
+  project)
+- `--mutable`, `-m` — show pinned/mutable status column (reads from fpm.toml)
 - `--manager <name>` — filter by manager (fpm, pip, uv, conda, poetry, pdm,
   system)
 - `--json` — output as JSON array

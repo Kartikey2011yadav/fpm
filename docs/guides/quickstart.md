@@ -34,21 +34,25 @@ fpm will:
 fpm run python main.py
 ```
 
-Or activate the environment manually:
-
-```bash
-source .venv/bin/activate
-python main.py
-```
+> No activation needed. `fpm run` handles the environment automatically. If you
+> need direct shell access to the venv's Python (e.g., for an IDE), you can
+> still use `source .venv/bin/activate`, but it's never required for fpm
+> commands.
 
 ## See What's Installed
 
 ```bash
-# Packages in your venv
-fpm pip list
+# fpm-managed packages in your project
+fpm list
 
-# All packages across all managers
-fpm pip list --all
+# All packages from all managers (pip, uv, conda, etc.)
+fpm list -a
+
+# Show which packages are immutable (pinned)
+fpm list --mutable
+
+# System packages (when outside a project)
+fpm list --system
 ```
 
 ## Save Environment State

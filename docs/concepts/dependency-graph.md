@@ -2,14 +2,15 @@
 
 ## The Problem
 
-When you `pip install flask`, pip installs flask + 8 dependencies.
-When you `pip uninstall flask`, pip removes flask but leaves all 8 deps
-orphaned forever. There's no way to clean them up because pip doesn't know
-which packages you explicitly wanted vs which were just pulled in.
+When you `pip install flask`, pip installs flask + 8 dependencies. When you
+`pip uninstall flask`, pip removes flask but leaves all 8 deps orphaned forever.
+There's no way to clean them up because pip doesn't know which packages you
+explicitly wanted vs which were just pulled in.
 
 ## fpm's Solution
 
 fpm maintains a **dependency graph** that tracks:
+
 - **Requested** packages — you explicitly typed `fpm install X`
 - **Transitive** packages — installed as dependencies of something else
 
@@ -32,6 +33,34 @@ fpm maintains a **dependency graph** that tracks:
 }
 ```
 
+## Visual Model
+
+```mermaid
+graph TD
+    subgraph "REQUESTED (protected from autoremove)"
+        flask["flask 3.1.3 ✓"]
+        requests["requests 2.34.2 ✓"]
+    end
+    subgraph "TRANSITIVE (removable when orphaned)"
+        werkzeug["werkzeug 3.1.8"]
+        jinja2["jinja2 3.1.6"]
+        click["click 8.4.1"]
+        markupsafe["markupsafe 3.0.3"]
+        certifi["certifi 2024.2"]
+        urllib3["urllib3 2.7.0"]
+    end
+
+    flask --> werkzeug
+    flask --> jinja2
+    flask --> click
+    jinja2 --> markupsafe
+    requests --> certifi
+    requests --> urllib3
+```
+
+When you remove flask, werkzeug/jinja2/click/markupsafe become orphans. certifi
+and urllib3 stay (requests still needs them).
+
 ## How It Works
 
 ### On Install
@@ -41,6 +70,7 @@ fpm install -s flask requests
 ```
 
 fpm resolves the full dependency tree, then records:
+
 - `flask` → **requested** (user asked for it)
 - `requests` → **requested** (user asked for it)
 - `werkzeug`, `jinja2`, `click`, `urllib3`, `certifi`, etc. → **transitive**
@@ -64,8 +94,8 @@ fpm remove -sp flask
 fpm autoremove --system
 ```
 
-Scans the graph for all transitive packages with zero dependents.
-Interactive confirmation with exclude option.
+Scans the graph for all transitive packages with zero dependents. Interactive
+confirmation with exclude option.
 
 ### Mark
 
@@ -76,19 +106,23 @@ fpm mark --show click          # check current status
 ```
 
 Change a package's status. Like:
+
 - `pacman --asexplicit` / `pacman --asdeps`
 - `apt-mark manual` / `apt-mark auto`
 
 ## Pre-existing Packages
 
 When fpm encounters packages installed before fpm was set up:
-- **Other managers' packages (pip, conda, system)** → never touched, never tracked
+
+- **Other managers' packages (pip, conda, system)** → never touched, never
+  tracked
 - **fpm packages without graph entry** → treated as requested (safe default)
 - Graph is built incrementally from the first `fpm install`
 
 ## Fallback Recovery
 
 If the graph file is lost or corrupted:
+
 1. Falls back to METADATA scan (reads `Requires-Dist` from dist-info)
 2. Rebuilds relationships from installed package metadata
 3. Marks all found packages as "requested" (safe — prevents accidental removal)
@@ -116,28 +150,32 @@ $ fpm tree --system
 
 ## Comparison with Other Tools
 
-| Tool | Tracks install reason | Auto-cleans orphans | Mark command |
-|------|----------------------|---------------------|--------------|
-| **fpm** | Yes (depgraph.json) | `autoremove` / `--purge` | `fpm mark` |
-| **pacman** | Yes (local DB) | `pacman -Rns` | `--asexplicit` / `--asdeps` |
-| **apt** | Yes (auto/manual) | `apt autoremove` | `apt-mark` |
-| **pip** | No | No | No |
-| **uv** | No | No | No |
-| **npm** | Via package.json | `npm prune` | N/A |
-| **cargo** | Via Cargo.toml | No (rebuilds) | N/A |
+| Tool       | Tracks install reason | Auto-cleans orphans      | Mark command                |
+| ---------- | --------------------- | ------------------------ | --------------------------- |
+| **fpm**    | Yes (depgraph.json)   | `autoremove` / `--purge` | `fpm mark`                  |
+| **pacman** | Yes (local DB)        | `pacman -Rns`            | `--asexplicit` / `--asdeps` |
+| **apt**    | Yes (auto/manual)     | `apt autoremove`         | `apt-mark`                  |
+| **pip**    | No                    | No                       | No                          |
+| **uv**     | No                    | No                       | No                          |
+| **npm**    | Via package.json      | `npm prune`              | N/A                         |
+| **cargo**  | Via Cargo.toml        | No (rebuilds)            | N/A                         |
 
-fpm brings system package manager capabilities (pacman/apt) to Python
-for the first time.
+fpm brings system package manager capabilities (pacman/apt) to Python for the
+first time.
 
 ## Developer Reference
 
 Key code:
-- `internal/depgraph/graph.go` — Graph struct, Load/Save, Orphans(), SyncFromInstalled()
+
+- `internal/depgraph/graph.go` — Graph struct, Load/Save, Orphans(),
+  SyncFromInstalled()
 - `internal/cli/mark.go` — `fpm mark` command
-- `internal/cli/install_impl.go` — graph update on install (AddRequested/AddTransitive)
+- `internal/cli/install_impl.go` — graph update on install
+  (AddRequested/AddTransitive)
 - `internal/cli/remove_impl.go` — graph update on remove, purge uses Orphans()
 - `internal/cli/tree_impl.go` — `printDepGraphTree()` for system tree
 
 Storage:
+
 - System: `~/.local/share/fpm/depgraph.json`
 - Per-venv: `.venv/.fpm-depgraph.json`

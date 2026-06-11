@@ -82,8 +82,22 @@ Key behaviors:
 
 - **fpm packages**: fully restored from CAS (instant, no network)
 - **Missing from CAS**: automatically re-downloaded from PyPI
-- **External packages**: drift is reported but not modified (you manage
-  pip/conda yourself)
+- **External packages (pip/uv/conda)**: reinstalled to exact snapshot version
+- **New packages (added after snapshot)**: removed from environment
+- **fpm.toml config**: reverted to snapshot state (including immutable pins)
+
+### System Conflict Resolution
+
+If a project restore conflicts with system packages, fpm prompts:
+
+```
+  ⚠ System package conflicts detected:
+    numpy: snapshot needs 1.24.0, system has 2.0.0
+
+  [1] Roll back system packages too
+  [2] Install at project level (overrides system)
+  [3] Abort
+```
 
 ## Scoping
 
@@ -91,7 +105,13 @@ Snapshots are per-environment:
 
 - Each project's `.venv` has its own snapshot history
 - Project A's snapshots are independent of Project B's
-- Use `--system` for system-level snapshots
+- System-level snapshots use `--system`:
+
+```bash
+fpm snapshot create --system "before system upgrade"
+fpm snapshot list --system
+fpm snapshot restore --system <id>
+```
 
 ## Deleting Snapshots
 
