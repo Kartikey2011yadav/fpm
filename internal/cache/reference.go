@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/kartikeyyadav/fpm/internal/fs"
 )
 
 type RefTracker struct {
@@ -176,12 +178,15 @@ func (r *RefTracker) readEnvRef(envHash string) (*EnvRef, error) {
 
 func (r *RefTracker) writeEnvRef(envHash string, ref *EnvRef) error {
 	os.MkdirAll(r.envRefsDir(), 0755)
+	path := r.envRefPath(envHash)
+	lock, _ := fs.LockFile(path)
+	defer fs.UnlockFile(lock)
 	ref.UpdatedAt = time.Now()
 	data, err := json.MarshalIndent(ref, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(r.envRefPath(envHash), data, 0644)
+	return os.WriteFile(path, data, 0644)
 }
 
 func (r *RefTracker) readCASRef(key CASKey) (*CASRef, error) {
@@ -195,12 +200,15 @@ func (r *RefTracker) readCASRef(key CASKey) (*CASRef, error) {
 
 func (r *RefTracker) writeCASRef(key CASKey, ref *CASRef) error {
 	os.MkdirAll(r.casRefsDir(), 0755)
+	path := r.casRefPath(key)
+	lock, _ := fs.LockFile(path)
+	defer fs.UnlockFile(lock)
 	ref.UpdatedAt = time.Now()
 	data, err := json.MarshalIndent(ref, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(r.casRefPath(key), data, 0644)
+	return os.WriteFile(path, data, 0644)
 }
 
 func (r *RefTracker) addToEnvIndex(envHash string, key CASKey) error {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kartikeyyadav/fpm/internal/config"
+	"github.com/kartikeyyadav/fpm/internal/fs"
 )
 
 // PackageNode represents a package in the dependency graph.
@@ -38,7 +39,9 @@ func Load(envPath string) *Graph {
 	g := &Graph{Packages: make(map[string]*PackageNode)}
 
 	path := graphPath(envPath)
+	lock, _ := fs.LockFileShared(path)
 	data, err := os.ReadFile(path)
+	fs.UnlockFile(lock)
 	if err != nil {
 		return g
 	}
@@ -49,13 +52,19 @@ func Load(envPath string) *Graph {
 	return g
 }
 
-// Save writes the dependency graph to disk.
+// Save writes the dependency graph to disk with exclusive file lock.
 func (g *Graph) Save(envPath string) error {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
 	path := graphPath(envPath)
 	os.MkdirAll(filepath.Dir(path), 0755)
+
+	lock, err := fs.LockFile(path)
+	if err != nil {
+		return err
+	}
+	defer fs.UnlockFile(lock)
 
 	data, err := json.MarshalIndent(g, "", "  ")
 	if err != nil {

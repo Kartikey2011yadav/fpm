@@ -131,6 +131,15 @@ var snapshotRestoreCmd = &cobra.Command{
 			return err
 		}
 
+		// Permission check for system restores
+		if flagSystem && envInfo.sitePackages != "" {
+			if f, err := os.OpenFile(envInfo.sitePackages, os.O_RDONLY, 0); err != nil {
+				return fmt.Errorf("no write access to %s\n\n  hint: System snapshot restore affects all users. Use sudo or ensure write permissions.", envInfo.sitePackages)
+			} else {
+				f.Close()
+			}
+		}
+
 		store := snapshot.NewStore(envInfo.storePath)
 		snap, err := store.Get(snapID)
 		if err != nil {
