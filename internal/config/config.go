@@ -32,6 +32,7 @@ type ToolConfig struct {
 	CrossManagerPolicy string `toml:"cross-manager-policy"` // "ask", "install", "skip"
 	LinkMode           string `toml:"link-mode"`            // "auto", "hardlink", "copy", "symlink"
 	Concurrency        int    `toml:"concurrency"`
+	Mode               string `toml:"mode"`                 // "single-user" (default), "multi-user"
 }
 
 type ImmutableConfig struct {

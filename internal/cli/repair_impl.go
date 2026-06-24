@@ -247,6 +247,19 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Handle mode change to multi-user
+	if key == "tool.mode" && value == "multi-user" {
+		sharedDir := config.SharedCacheDir()
+		fmt.Printf("\nMulti-user mode enabled.\n")
+		fmt.Printf("  Shared cache: %s\n", sharedDir)
+		fmt.Printf("\n  Setup (run as root):\n")
+		fmt.Printf("    mkdir -p %s\n", sharedDir)
+		fmt.Printf("    groupadd fpm 2>/dev/null\n")
+		fmt.Printf("    chgrp -R fpm %s\n", sharedDir)
+		fmt.Printf("    chmod -R 2775 %s\n", sharedDir)
+		fmt.Printf("    usermod -aG fpm <username>\n")
+	}
+
 	return nil
 }
 

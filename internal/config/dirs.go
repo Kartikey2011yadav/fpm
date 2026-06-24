@@ -10,6 +10,9 @@ func CacheDir() string {
 	if v := os.Getenv("FPM_CACHE_DIR"); v != "" {
 		return v
 	}
+	if IsMultiUserMode() {
+		return SharedCacheDir()
+	}
 	switch runtime.GOOS {
 	case "darwin":
 		return filepath.Join(homeDir(), "Library", "Caches", "fpm")
@@ -24,6 +27,34 @@ func CacheDir() string {
 		}
 		return filepath.Join(homeDir(), ".cache", "fpm")
 	}
+}
+
+func SharedCacheDir() string {
+	if v := os.Getenv("FPM_SHARED_CACHE_DIR"); v != "" {
+		return v
+	}
+	switch runtime.GOOS {
+	case "darwin":
+		return "/Library/Caches/fpm"
+	case "windows":
+		if v := os.Getenv("PROGRAMDATA"); v != "" {
+			return filepath.Join(v, "fpm", "cache")
+		}
+		return `C:\ProgramData\fpm\cache`
+	default:
+		return "/var/cache/fpm"
+	}
+}
+
+func IsMultiUserMode() bool {
+	if v := os.Getenv("FPM_MODE"); v == "multi-user" {
+		return true
+	}
+	modeFile := filepath.Join(SystemConfigDir(), "mode")
+	if data, err := os.ReadFile(modeFile); err == nil {
+		return string(data) == "multi-user"
+	}
+	return false
 }
 
 func DataDir() string {

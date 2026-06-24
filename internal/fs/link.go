@@ -105,6 +105,31 @@ func LinkDir(srcDir, dstDir string, mode LinkMode) error {
 	})
 }
 
+func AtomicReplace(srcDir, targetDir, pkgName string, mode LinkMode) error {
+	parent := filepath.Dir(targetDir)
+	tmpDst := filepath.Join(parent, ".fpm-install-"+pkgName)
+	os.RemoveAll(tmpDst)
+
+	if err := LinkDir(srcDir, tmpDst, mode); err != nil {
+		os.RemoveAll(tmpDst)
+		return err
+	}
+
+	finalPath := filepath.Join(targetDir, pkgName)
+	oldPath := finalPath + ".old"
+
+	os.Rename(finalPath, oldPath)
+	if err := os.Rename(filepath.Join(tmpDst, pkgName), finalPath); err != nil {
+		os.Rename(oldPath, finalPath)
+		os.RemoveAll(tmpDst)
+		return err
+	}
+
+	os.RemoveAll(oldPath)
+	os.RemoveAll(tmpDst)
+	return nil
+}
+
 func copyFile(src, dst string) error {
 	srcFile, err := os.Open(src)
 	if err != nil {

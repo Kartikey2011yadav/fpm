@@ -5,20 +5,21 @@ understand the architecture and design decisions.
 
 ## For Users
 
-| Document | What you'll learn |
-|----------|------------------|
-| [Virtual Environments](virtual-environments.md) | How fpm manages project isolation, venv detection, `--system` flag |
-| [Dependency Resolution](dependency-resolution.md) | How packages are resolved, lockfiles, immutable pins |
-| [Cross-Manager Coexistence](cross-manager-coexistence.md) | How fpm works alongside pip/uv/conda, conflict handling |
-| [Environment Snapshots](environment-snapshots.md) | Git-like versioning for your Python environment |
-| [TLS & Certificates](tls-and-certificates.md) | Certificate handling, VPN/proxy support, insecure hosts |
+| Document                                                  | What you'll learn                                                  |
+| --------------------------------------------------------- | ------------------------------------------------------------------ |
+| [Virtual Environments](virtual-environments.md)           | How fpm manages project isolation, venv detection, `--system` flag |
+| [Dependency Resolution](dependency-resolution.md)         | How packages are resolved, lockfiles, immutable pins               |
+| [Cross-Manager Coexistence](cross-manager-coexistence.md) | How fpm works alongside pip/uv/conda, conflict handling            |
+| [Environment Snapshots](environment-snapshots.md)         | Git-like versioning for your Python environment                    |
+| [TLS & Certificates](tls-and-certificates.md)             | Certificate handling, VPN/proxy support, insecure hosts            |
+| [Multi-User Systems](multi-user-systems.md)               | Single-user vs multi-user mode, shared CAS, file locking, scaling  |
 
 ## For Developers
 
-| Document | What you'll learn |
-|----------|------------------|
+| Document                                                      | What you'll learn                               |
+| ------------------------------------------------------------- | ----------------------------------------------- |
 | [Content-Addressable Storage](content-addressable-storage.md) | CAS model, linking strategies, zero-duplication |
-| [Caching Strategy](caching-strategy.md) | All cache layers, TTLs, reference tracking, GC |
+| [Caching Strategy](caching-strategy.md)                       | All cache layers, TTLs, reference tracking, GC  |
 
 ## Quick Architecture Overview
 
