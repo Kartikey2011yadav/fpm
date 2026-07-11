@@ -11,6 +11,7 @@ import (
 	"strconv"
 
 	"github.com/kartikeyyadav/fpm/internal/config"
+	"github.com/kartikeyyadav/fpm/internal/log"
 )
 
 type Cache struct {
@@ -84,7 +85,13 @@ func (c *Cache) CASPath(key CASKey) string {
 
 func (c *Cache) Has(key CASKey) bool {
 	_, err := os.Stat(c.CASPath(key))
-	return err == nil
+	hit := err == nil
+	if hit {
+		log.Debug("cache hit: %s", key)
+	} else {
+		log.Debug("cache miss: %s", key)
+	}
+	return hit
 }
 
 func (c *Cache) Store(wheelPath string) (CASKey, error) {
@@ -98,8 +105,10 @@ func (c *Cache) Store(wheelPath string) (CASKey, error) {
 	// Check if already stored
 	casPath := c.CASPath(key)
 	if _, err := os.Stat(casPath); err == nil {
-		return key, nil // already exists
+		log.Debug("cache store: already exists %s", key)
+		return key, nil
 	}
+	log.Info("cache store: adding %s from %s", key, filepath.Base(wheelPath))
 
 	// Extract to temp with unique path (PID + random), then atomic rename
 	suffix := strconv.Itoa(os.Getpid()) + "-" + strconv.FormatInt(rand.Int63(), 36)
