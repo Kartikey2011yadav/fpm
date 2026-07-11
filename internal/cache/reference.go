@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kartikeyyadav/fpm/internal/config"
 	"github.com/kartikeyyadav/fpm/internal/fs"
 )
 
@@ -179,14 +180,16 @@ func (r *RefTracker) readEnvRef(envHash string) (*EnvRef, error) {
 func (r *RefTracker) writeEnvRef(envHash string, ref *EnvRef) error {
 	os.MkdirAll(r.envRefsDir(), 0755)
 	path := r.envRefPath(envHash)
-	lock, _ := fs.LockFile(path)
-	defer fs.UnlockFile(lock)
 	ref.UpdatedAt = time.Now()
 	data, err := json.MarshalIndent(ref, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0644)
+	filePerm := os.FileMode(0644)
+	if config.IsMultiUserMode() {
+		filePerm = 0664
+	}
+	return os.WriteFile(path, data, filePerm)
 }
 
 func (r *RefTracker) readCASRef(key CASKey) (*CASRef, error) {
@@ -201,17 +204,27 @@ func (r *RefTracker) readCASRef(key CASKey) (*CASRef, error) {
 func (r *RefTracker) writeCASRef(key CASKey, ref *CASRef) error {
 	os.MkdirAll(r.casRefsDir(), 0755)
 	path := r.casRefPath(key)
-	lock, _ := fs.LockFile(path)
-	defer fs.UnlockFile(lock)
 	ref.UpdatedAt = time.Now()
 	data, err := json.MarshalIndent(ref, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0644)
+	filePerm := os.FileMode(0644)
+	if config.IsMultiUserMode() {
+		filePerm = 0664
+	}
+	return os.WriteFile(path, data, filePerm)
 }
 
 func (r *RefTracker) addToEnvIndex(envHash string, key CASKey) error {
+	os.MkdirAll(r.envRefsDir(), 0755)
+	path := r.envRefPath(envHash)
+	lock, err := fs.LockFile(path)
+	if err != nil {
+		return fmt.Errorf("failed to acquire env ref lock: %w", err)
+	}
+	defer fs.UnlockFile(lock)
+
 	ref, _ := r.readEnvRef(envHash)
 	if ref == nil {
 		ref = &EnvRef{}
@@ -220,7 +233,7 @@ func (r *RefTracker) addToEnvIndex(envHash string, key CASKey) error {
 	keyStr := key.String()
 	for _, k := range ref.CASKeys {
 		if k == keyStr {
-			return nil // already exists
+			return nil
 		}
 	}
 	ref.CASKeys = append(ref.CASKeys, keyStr)
@@ -228,6 +241,14 @@ func (r *RefTracker) addToEnvIndex(envHash string, key CASKey) error {
 }
 
 func (r *RefTracker) removeFromEnvIndex(envHash string, key CASKey) error {
+	os.MkdirAll(r.envRefsDir(), 0755)
+	path := r.envRefPath(envHash)
+	lock, err := fs.LockFile(path)
+	if err != nil {
+		return nil
+	}
+	defer fs.UnlockFile(lock)
+
 	ref, err := r.readEnvRef(envHash)
 	if err != nil {
 		return nil
@@ -245,6 +266,14 @@ func (r *RefTracker) removeFromEnvIndex(envHash string, key CASKey) error {
 }
 
 func (r *RefTracker) addToCASIndex(key CASKey, envPath, pkgName, version string) error {
+	os.MkdirAll(r.casRefsDir(), 0755)
+	path := r.casRefPath(key)
+	lock, err := fs.LockFile(path)
+	if err != nil {
+		return fmt.Errorf("failed to acquire CAS ref lock: %w", err)
+	}
+	defer fs.UnlockFile(lock)
+
 	ref, _ := r.readCASRef(key)
 	if ref == nil {
 		ref = &CASRef{}
@@ -252,7 +281,7 @@ func (r *RefTracker) addToCASIndex(key CASKey, envPath, pkgName, version string)
 
 	for _, e := range ref.Environments {
 		if e == envPath {
-			return nil // already exists
+			return nil
 		}
 	}
 	ref.Environments = append(ref.Environments, envPath)
@@ -262,6 +291,14 @@ func (r *RefTracker) addToCASIndex(key CASKey, envPath, pkgName, version string)
 }
 
 func (r *RefTracker) removeFromCASIndex(key CASKey, envPath string) error {
+	os.MkdirAll(r.casRefsDir(), 0755)
+	path := r.casRefPath(key)
+	lock, err := fs.LockFile(path)
+	if err != nil {
+		return nil
+	}
+	defer fs.UnlockFile(lock)
+
 	ref, err := r.readCASRef(key)
 	if err != nil {
 		return nil
@@ -275,6 +312,38 @@ func (r *RefTracker) removeFromCASIndex(key CASKey, envPath string) error {
 	}
 	ref.Environments = filtered
 	return r.writeCASRef(key, ref)
+}
+
+// FindCASKeyByPackage searches the CAS refs directory for a matching package name and version,
+// returning the CAS digest if found.
+func (r *RefTracker) FindCASKeyByPackage(pkgName, version string) string {
+	refsDir := r.casRefsDir()
+	entries, err := os.ReadDir(refsDir)
+	if err != nil {
+		return ""
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(refsDir, entry.Name()))
+		if err != nil {
+			continue
+		}
+		var ref CASRef
+		if json.Unmarshal(data, &ref) != nil {
+			continue
+		}
+		if ref.PackageName == pkgName && ref.Version == version {
+			// Extract the digest from filename: "sha256-<digest>.json"
+			name := strings.TrimSuffix(entry.Name(), ".json")
+			parts := strings.SplitN(name, "-", 2)
+			if len(parts) == 2 {
+				return parts[1]
+			}
+		}
+	}
+	return ""
 }
 
 func hashString(s string) string {

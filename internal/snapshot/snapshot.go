@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/kartikeyyadav/fpm/internal/cache"
+	"github.com/kartikeyyadav/fpm/internal/config"
 	"github.com/kartikeyyadav/fpm/internal/env"
 	"github.com/kartikeyyadav/fpm/internal/pep440"
 	"github.com/kartikeyyadav/fpm/pkg/types"
@@ -359,16 +360,9 @@ func hashPath(path string) string {
 }
 
 func cacheBaseDir() string {
-	// Use config package's CacheDir
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".cache", "fpm")
+	return config.CacheDir()
 }
 
 func lookupCASKey(tracker *cache.RefTracker, name types.PackageName, version pep440.Version) string {
-	// In production, this would query the ref tracker's by-env index
-	// to find the CAS key for this specific package in this environment
-	_ = tracker
-	_ = name
-	_ = version
-	return ""
+	return tracker.FindCASKeyByPackage(name.Normalized(), version.String())
 }

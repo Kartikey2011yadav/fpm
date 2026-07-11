@@ -39,6 +39,13 @@ func runSync(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no virtual environment found.\nRun 'fpm venv' to create one, or 'fpm init' to start a new project")
 	}
 
+	// Acquire venv-level lock to prevent concurrent sync corruption
+	venvLock, lockErr := fs.LockFile(filepath.Join(activeVenv.SitePackages, ".fpm"))
+	if lockErr != nil {
+		return fmt.Errorf("could not acquire environment lock: %w", lockErr)
+	}
+	defer fs.UnlockFile(venvLock)
+
 	// Scan current environment
 	sitePackagesDirs := env.FindSitePackagesDirs([]string{activeVenv.SitePackages})
 	scanner := env.NewScanner(sitePackagesDirs)
@@ -131,9 +138,14 @@ func runSync(cmd *cobra.Command, args []string) error {
 	}
 
 	for _, pkg := range toRemove {
-		fmt.Printf("  Would remove %s %s\n", pkg.Name.Raw(), pkg.Version.String())
+		pkgName := types.NewPackageName(pkg.Name.Raw())
+		if err := uninstallPackage(activeVenv.SitePackages, pkgName); err != nil {
+			fmt.Printf("  Warning: failed to remove %s: %v\n", pkg.Name.Raw(), err)
+			continue
+		}
+		fmt.Printf("  Removed %s %s\n", pkg.Name.Raw(), pkg.Version.String())
 	}
 
-	fmt.Printf("\nSynced: %d installed, %d to remove.\n", len(toInstall), len(toRemove))
+	fmt.Printf("\nSynced: %d installed, %d removed.\n", len(toInstall), len(toRemove))
 	return nil
 }

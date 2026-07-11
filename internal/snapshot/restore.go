@@ -123,6 +123,10 @@ func Restore(snap *Snapshot, currentScan *env.ScanResult, opts RestoreOptions) (
 		}
 	}
 
+	// Create safety snapshot before destructive restore
+	safetyStore := NewStore(opts.EnvPath)
+	safetyStore.Capture(currentScan, "", "", nil, "auto: pre-restore safety snapshot", opts.ProjectDir)
+
 	// Clean fpm packages from site-packages before restore
 	CleanSitePackages(opts.SitePackages)
 

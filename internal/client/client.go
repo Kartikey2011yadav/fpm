@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -82,6 +84,95 @@ func New(opts ClientOptions) *RegistryClient {
 		semaphore:   make(chan struct{}, opts.Concurrency),
 		transport:   transport,
 	}
+}
+
+// doWithRetry wraps httpClient.Do with retry logic using exponential backoff.
+// It retries on transient errors: timeouts, 429, 500, 502, 503, connection refused,
+// and DNS temporary errors. It does not retry on 400, 401, 403, 404, 422.
+func (c *RegistryClient) doWithRetry(req *http.Request) (*http.Response, error) {
+	const maxRetries = 3
+	backoffs := []time.Duration{500 * time.Millisecond, 1 * time.Second, 2 * time.Second}
+
+	var lastErr error
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			time.Sleep(backoffs[attempt-1])
+			// Reset request body if needed (GET requests have no body)
+			if req.GetBody != nil {
+				body, err := req.GetBody()
+				if err != nil {
+					return nil, err
+				}
+				req.Body = body
+			}
+		}
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			if isRetryableError(err) && attempt < maxRetries {
+				lastErr = err
+				continue
+			}
+			return nil, err
+		}
+
+		// Check for retryable status codes
+		if isRetryableStatus(resp.StatusCode) && attempt < maxRetries {
+			resp.Body.Close()
+			lastErr = fmt.Errorf("HTTP %d", resp.StatusCode)
+			continue
+		}
+
+		return resp, nil
+	}
+
+	return nil, fmt.Errorf("request failed after %d retries: %w", maxRetries, lastErr)
+}
+
+// isRetryableError checks if a network error is transient and worth retrying.
+func isRetryableError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Check for timeout
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+
+	// Check for DNS temporary errors
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) && dnsErr.Temporary() {
+		return true
+	}
+
+	// Check for connection refused / reset
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		return true
+	}
+
+	errMsg := err.Error()
+	if strings.Contains(errMsg, "connection refused") ||
+		strings.Contains(errMsg, "connection reset") ||
+		strings.Contains(errMsg, "i/o timeout") {
+		return true
+	}
+
+	return false
+}
+
+// isRetryableStatus returns true for HTTP status codes that indicate a transient error.
+func isRetryableStatus(code int) bool {
+	switch code {
+	case http.StatusTooManyRequests, // 429
+		http.StatusInternalServerError, // 500
+		http.StatusBadGateway,          // 502
+		http.StatusServiceUnavailable:  // 503
+		return true
+	}
+	return false
 }
 
 // PEP 691 JSON Simple API response types
@@ -166,7 +257,7 @@ func (c *RegistryClient) fetchFromIndex(ctx context.Context, index config.IndexC
 	req.Header.Set("User-Agent", "fpm/0.1.0")
 
 	c.semaphore <- struct{}{}
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.doWithRetry(req)
 	<-c.semaphore
 
 	if err != nil {
@@ -211,7 +302,7 @@ func (c *RegistryClient) DownloadWheel(ctx context.Context, file SimpleFile, des
 	req.Header.Set("User-Agent", "fpm/0.1.0")
 
 	c.semaphore <- struct{}{}
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.doWithRetry(req)
 	<-c.semaphore
 
 	if err != nil {

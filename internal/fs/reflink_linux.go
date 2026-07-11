@@ -3,7 +3,6 @@ package fs
 import (
 	"os"
 	"syscall"
-	"unsafe"
 )
 
 const FICLONE = 0x40049409
@@ -26,12 +25,12 @@ func reflink(src, dst string) error {
 	}
 	defer dstFile.Close()
 
-	// Try FICLONE ioctl for CoW copy
+	// FICLONE ioctl for CoW copy — arg is the source fd
 	_, _, errno := syscall.Syscall(
 		syscall.SYS_IOCTL,
 		dstFile.Fd(),
 		FICLONE,
-		uintptr(unsafe.Pointer(&srcFile)),
+		srcFile.Fd(),
 	)
 
 	if errno != 0 {

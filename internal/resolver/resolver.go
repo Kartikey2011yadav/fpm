@@ -12,6 +12,7 @@ import (
 	"github.com/kartikeyyadav/fpm/internal/env"
 	"github.com/kartikeyyadav/fpm/internal/pep440"
 	"github.com/kartikeyyadav/fpm/internal/pep508"
+	"github.com/kartikeyyadav/fpm/internal/platform"
 	"github.com/kartikeyyadav/fpm/internal/wheel"
 	"github.com/kartikeyyadav/fpm/pkg/types"
 )
@@ -21,6 +22,7 @@ type Resolver struct {
 	scanner    *env.ScanResult
 	immutables []config.ImmutablePackage
 	strategy   ResolutionStrategy
+	tagSet     *platform.TagSet
 	ctx        context.Context
 }
 
@@ -45,18 +47,26 @@ type Resolution struct {
 }
 
 type ResolverOptions struct {
-	Client     *client.RegistryClient
-	Scanner    *env.ScanResult
-	Immutables []config.ImmutablePackage
-	Strategy   ResolutionStrategy
+	Client       *client.RegistryClient
+	Scanner      *env.ScanResult
+	Immutables   []config.ImmutablePackage
+	Strategy     ResolutionStrategy
+	PythonVersion string
 }
 
 func New(opts ResolverOptions) *Resolver {
+	pyVer := opts.PythonVersion
+	if pyVer == "" {
+		pyVer = "311"
+	}
+	tagSet := platform.GenerateTags(pyVer, platform.Current())
+
 	return &Resolver{
 		client:     opts.Client,
 		scanner:    opts.Scanner,
 		immutables: opts.Immutables,
 		strategy:   opts.Strategy,
+		tagSet:     tagSet,
 		ctx:        context.Background(),
 	}
 }
@@ -66,30 +76,47 @@ func (r *Resolver) Resolve(requirements []pep508.Requirement) (*Resolution, erro
 	queue := make([]pep508.Requirement, len(requirements))
 	copy(queue, requirements)
 
-	visited := make(map[string]bool)
+	// Track all constraints per package for conflict detection
+	constraints := make(map[string][]pep508.Requirement)
 
 	for len(queue) > 0 {
 		req := queue[0]
 		queue = queue[1:]
 
 		pkgName := req.Name.Normalized()
-		if visited[pkgName] {
+
+		// Record constraint
+		constraints[pkgName] = append(constraints[pkgName], req)
+
+		// If already resolved, verify the resolved version satisfies this new constraint
+		if existing, ok := resolved[pkgName]; ok {
+			if len(req.Specifiers) > 0 && !req.Specifiers.Contains(existing.Version) {
+				return nil, &ConflictError{
+					Package:     req.Name,
+					Resolved:    existing.Version,
+					Constraints: constraints[pkgName],
+				}
+			}
 			continue
 		}
-		visited[pkgName] = true
+
+		// Merge all known specifiers for this package
+		mergedReq := req
+		for _, prev := range constraints[pkgName][:len(constraints[pkgName])-1] {
+			mergedReq.Specifiers = append(mergedReq.Specifiers, prev.Specifiers...)
+		}
 
 		// Check immutable constraints
 		if err := r.checkImmutable(req.Name); err != nil {
 			immVer := r.getImmutableVersion(req.Name)
 			if immVer != nil {
-				if !req.Specifiers.Contains(*immVer) {
+				if !mergedReq.Specifiers.Contains(*immVer) {
 					return nil, &ImmutableConflictError{
 						Package:   req.Name,
-						Requested: req.Specifiers.String(),
+						Requested: mergedReq.Specifiers.String(),
 						Pinned:    *immVer,
 					}
 				}
-				// Use the immutable version
 				resolved[pkgName] = &ResolvedPackage{
 					Name:    req.Name,
 					Version: *immVer,
@@ -98,8 +125,8 @@ func (r *Resolver) Resolve(requirements []pep508.Requirement) (*Resolution, erro
 			}
 		}
 
-		// Resolve the package version
-		pkg, err := r.resolvePackage(req)
+		// Resolve the package version using merged constraints
+		pkg, err := r.resolvePackage(mergedReq)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve %s: %w", req.Name.Raw(), err)
 		}
@@ -108,10 +135,7 @@ func (r *Resolver) Resolve(requirements []pep508.Requirement) (*Resolution, erro
 
 		// Add transitive dependencies to queue
 		for _, dep := range pkg.Deps {
-			depName := dep.Name.Normalized()
-			if !visited[depName] {
-				queue = append(queue, dep)
-			}
+			queue = append(queue, dep)
 		}
 	}
 
@@ -129,6 +153,26 @@ func (r *Resolver) Resolve(requirements []pep508.Requirement) (*Resolution, erro
 	return result, nil
 }
 
+// ConflictError indicates incompatible version requirements for a package.
+type ConflictError struct {
+	Package     types.PackageName
+	Resolved    pep440.Version
+	Constraints []pep508.Requirement
+}
+
+func (e *ConflictError) Error() string {
+	var parts []string
+	for _, c := range e.Constraints {
+		if len(c.Specifiers) > 0 {
+			parts = append(parts, fmt.Sprintf("%s (requires %s%s)", c.Name.Raw(), c.Name.Raw(), c.Specifiers.String()))
+		}
+	}
+	return fmt.Sprintf(
+		"version conflict for %s: resolved %s but incompatible constraints exist: %s",
+		e.Package.Raw(), e.Resolved.String(), fmt.Sprintf("%v", parts),
+	)
+}
+
 func (r *Resolver) resolvePackage(req pep508.Requirement) (*ResolvedPackage, error) {
 	detail, err := r.client.FetchPackageVersions(r.ctx, req.Name)
 	if err != nil {
@@ -137,53 +181,48 @@ func (r *Resolver) resolvePackage(req pep508.Requirement) (*ResolvedPackage, err
 
 	// Collect available versions from wheel filenames
 	type candidate struct {
-		version pep440.Version
-		file    client.SimpleFile
+		version  pep440.Version
+		file     client.SimpleFile
+		priority int
+		pure     bool
 	}
 
 	var candidates []candidate
-	seen := make(map[string]bool) // deduplicate by version string
 	for _, f := range detail.Files {
 		if f.IsYanked() {
 			continue
 		}
 		whl, err := wheel.ParseFilename(f.Filename)
 		if err != nil {
-			continue // skip non-wheel or unparseable
+			continue
 		}
 		if !req.Specifiers.Contains(whl.Version) {
 			continue
 		}
-		// Prefer pure-python wheels (py3-none-any) or skip platform check for now
-		verStr := whl.Version.String()
-		if seen[verStr] && !whl.IsPureWheel() {
+		// Check platform compatibility
+		wheelTags := whl.Tags()
+		compatible, priority := r.tagSet.Compatible(wheelTags)
+		if !compatible {
 			continue
 		}
-		// Prefer pure wheels over platform-specific
-		if whl.IsPureWheel() || !seen[verStr] {
-			if whl.IsPureWheel() {
-				seen[verStr] = true
-			}
-			candidates = append(candidates, candidate{
-				version: whl.Version,
-				file:    f,
-			})
-		}
+		candidates = append(candidates, candidate{
+			version:  whl.Version,
+			file:     f,
+			priority: priority,
+			pure:     whl.IsPureWheel(),
+		})
 	}
-	// Deduplicate: keep only one entry per version (prefer pure wheel)
+	// Deduplicate: keep best candidate per version (prefer pure, then best priority)
 	versionBest := make(map[string]candidate)
 	for _, c := range candidates {
 		key := c.version.String()
 		existing, exists := versionBest[key]
 		if !exists {
 			versionBest[key] = c
-		} else {
-			// Prefer pure wheel
-			w1, _ := wheel.ParseFilename(c.file.Filename)
-			w2, _ := wheel.ParseFilename(existing.file.Filename)
-			if w1 != nil && w1.IsPureWheel() && (w2 == nil || !w2.IsPureWheel()) {
-				versionBest[key] = c
-			}
+		} else if c.pure && !existing.pure {
+			versionBest[key] = c
+		} else if c.pure == existing.pure && c.priority < existing.priority {
+			versionBest[key] = c
 		}
 	}
 	candidates = candidates[:0]

@@ -63,13 +63,13 @@ func (s Specifier) Contains(v Version) bool {
 	case OpNotEqual:
 		return !matchEqual(s, v)
 	case OpLessThan:
-		return Compare(v, s.Version) < 0
+		return compareIgnoringLocal(v, s.Version) < 0
 	case OpLessThanEqual:
-		return Compare(v, s.Version) <= 0
+		return compareIgnoringLocal(v, s.Version) <= 0
 	case OpGreaterThan:
-		return Compare(v, s.Version) > 0
+		return compareIgnoringLocal(v, s.Version) > 0
 	case OpGreaterThanEqual:
-		return Compare(v, s.Version) >= 0
+		return compareIgnoringLocal(v, s.Version) >= 0
 	case OpCompatible:
 		return matchCompatible(s, v)
 	case OpArbitrary:
@@ -77,6 +77,15 @@ func (s Specifier) Contains(v Version) bool {
 	default:
 		return false
 	}
+}
+
+// compareIgnoringLocal compares versions ignoring local segments per PEP 440.
+func compareIgnoringLocal(a, b Version) int {
+	aCopy := a
+	bCopy := b
+	aCopy.Local = nil
+	bCopy.Local = nil
+	return Compare(aCopy, bCopy)
 }
 
 func matchEqual(s Specifier, v Version) bool {
@@ -93,7 +102,13 @@ func matchEqual(s Specifier, v Version) bool {
 		}
 		return v.Epoch == s.Version.Epoch
 	}
-	return Compare(v, s.Version) == 0
+	// PEP 440: for == (non-===), ignore local version on the candidate
+	// if the specifier has no local segment. E.g. ==1.0 matches 1.0+local1.
+	candidate := v
+	if len(s.Version.Local) == 0 {
+		candidate.Local = nil
+	}
+	return Compare(candidate, s.Version) == 0
 }
 
 func matchCompatible(s Specifier, v Version) bool {

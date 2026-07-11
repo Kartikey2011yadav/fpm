@@ -5,8 +5,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/kartikeyyadav/fpm/internal/config"
 )
@@ -43,6 +45,10 @@ func New(root string) *Cache {
 }
 
 func (c *Cache) Init() error {
+	perm := os.FileMode(0755)
+	if config.IsMultiUserMode() {
+		perm = 0775 | os.ModeSetgid
+	}
 	dirs := []string{
 		c.CASDir(),
 		c.WheelsDir(),
@@ -55,7 +61,7 @@ func (c *Cache) Init() error {
 		c.EnvironmentsDir(),
 	}
 	for _, d := range dirs {
-		if err := os.MkdirAll(d, 0755); err != nil {
+		if err := os.MkdirAll(d, perm); err != nil {
 			return fmt.Errorf("failed to create cache dir %s: %w", d, err)
 		}
 	}
@@ -95,8 +101,9 @@ func (c *Cache) Store(wheelPath string) (CASKey, error) {
 		return key, nil // already exists
 	}
 
-	// Extract to temp, then atomic rename
-	tmpPath := filepath.Join(c.TmpDir(), "extract-"+hash)
+	// Extract to temp with unique path (PID + random), then atomic rename
+	suffix := strconv.Itoa(os.Getpid()) + "-" + strconv.FormatInt(rand.Int63(), 36)
+	tmpPath := filepath.Join(c.TmpDir(), "extract-"+hash+"-"+suffix)
 	os.RemoveAll(tmpPath)
 	if err := os.MkdirAll(tmpPath, 0755); err != nil {
 		return CASKey{}, err
@@ -139,6 +146,11 @@ func (c *Cache) Clean() error {
 		os.RemoveAll(e)
 	}
 	return c.Init()
+}
+
+// HashFile computes the SHA256 hex digest of a file.
+func HashFile(path string) (string, error) {
+	return hashFile(path)
 }
 
 func hashFile(path string) (string, error) {

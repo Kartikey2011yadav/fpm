@@ -3,9 +3,13 @@ package cli
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/kartikeyyadav/fpm/internal/cache"
@@ -103,6 +107,13 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("cannot determine site-packages directory. Run 'fpm init' to create a project")
 	}
 
+	// Acquire venv-level lock to prevent concurrent install corruption
+	venvLock, lockErr := fs.LockFile(filepath.Join(targetSitePackages, ".fpm"))
+	if lockErr != nil {
+		return fmt.Errorf("could not acquire environment lock: %w", lockErr)
+	}
+	defer fs.UnlockFile(venvLock)
+
 	// Ensure site-packages directory exists
 	os.MkdirAll(targetSitePackages, 0755)
 
@@ -173,17 +184,38 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Download and install
+	// Download and install (transactional: stage first, then swap atomically)
 	pkgCache := cache.New(cfg.Cache.Dir)
 	pkgCache.Init()
 	refTracker := cache.NewRefTracker(pkgCache)
 
-	ctx := context.Background()
-	installed := 0
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
 	startTime := time.Now()
+
+	// Create a temporary staging directory for atomic install
+	stagingSuffix := strconv.Itoa(os.Getpid()) + "-" + strconv.FormatInt(rand.Int63(), 36)
+	stagingDir := filepath.Join(os.TempDir(), "fpm-install-"+stagingSuffix)
+	if err := os.MkdirAll(stagingDir, 0755); err != nil {
+		return fmt.Errorf("failed to create staging directory: %w", err)
+	}
+	defer os.RemoveAll(stagingDir) // cleanup on any exit path
+
+	// Track successfully staged packages for lockfile accuracy
+	type stagedPkg struct {
+		pkg    resolver.ResolvedPackage
+		casKey cache.CASKey
+	}
+	var stagedPackages []stagedPkg
 
 	fmt.Println()
 	for _, pkg := range res.Packages {
+		if ctx.Err() != nil {
+			fmt.Printf("\n  Interrupted. Cleaning up...\n")
+			os.RemoveAll(stagingDir)
+			return fmt.Errorf("install interrupted by signal")
+		}
+
 		if pkg.URL == "" {
 			continue
 		}
@@ -199,34 +231,91 @@ func runInstall(cmd *cobra.Command, args []string) error {
 			dlFile := client.SimpleFile{URL: pkg.URL, Filename: wheelFilename}
 			if err := pypiClient.DownloadWheel(ctx, dlFile, wheelPath); err != nil {
 				fmt.Printf(" \033[31m✗ failed\033[0m\n")
-				fmt.Fprintf(os.Stderr, "    %v\n", err)
-				continue
+				os.RemoveAll(stagingDir)
+				return fmt.Errorf("failed to download %s: %w", pkg.Name.Raw(), err)
 			}
 			elapsed := time.Since(dlStart)
 			fmt.Printf(" \033[32m✓\033[0m \033[2m%dms\033[0m\n", elapsed.Milliseconds())
+
+			// Verify SHA256 hash after download
+			if pkg.Hash != "" {
+				fileHash, hashErr := cache.HashFile(wheelPath)
+				if hashErr != nil {
+					os.Remove(wheelPath)
+					os.RemoveAll(stagingDir)
+					return fmt.Errorf("hash computation error for %s: %w", pkg.Name.Raw(), hashErr)
+				}
+				if fileHash != pkg.Hash {
+					os.Remove(wheelPath)
+					os.RemoveAll(stagingDir)
+					return fmt.Errorf("hash mismatch for %s: expected %s, got %s", pkg.Name.Raw(), pkg.Hash, fileHash)
+				}
+			}
 		} else {
-			// Already cached
+			// Already cached — verify hash integrity
+			if pkg.Hash != "" {
+				fileHash, hashErr := cache.HashFile(wheelPath)
+				if hashErr != nil {
+					os.Remove(wheelPath)
+					os.RemoveAll(stagingDir)
+					return fmt.Errorf("hash computation error for cached %s: %w", pkg.Name.Raw(), hashErr)
+				}
+				if fileHash != pkg.Hash {
+					os.Remove(wheelPath)
+					os.RemoveAll(stagingDir)
+					return fmt.Errorf("hash mismatch for cached %s: expected %s, got %s", pkg.Name.Raw(), pkg.Hash, fileHash)
+				}
+			}
 			fmt.Printf("  \033[32m✓\033[0m \033[1m%-25s\033[0m \033[36m%s\033[0m \033[2m(cached)\033[0m\n", pkg.Name.Raw(), pkg.Version.String())
 		}
 
 		// Store in CAS
 		casKey, err := pkgCache.Store(wheelPath)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "    error caching %s: %v\n", pkg.Name.Raw(), err)
-			continue
+			os.RemoveAll(stagingDir)
+			return fmt.Errorf("failed to store %s in cache: %w", pkg.Name.Raw(), err)
 		}
 
-		// Link to site-packages
+		// Link CAS -> staging directory (NOT directly to site-packages)
 		casPath, _ := pkgCache.Retrieve(casKey)
-		if err := fs.LinkDir(casPath, targetSitePackages, fs.LinkModeAuto); err != nil {
-			fmt.Fprintf(os.Stderr, "    error installing %s: %v\n", pkg.Name.Raw(), err)
-			continue
+		if err := fs.LinkDir(casPath, stagingDir, fs.LinkModeAuto); err != nil {
+			os.RemoveAll(stagingDir)
+			return fmt.Errorf("failed to stage %s: %w", pkg.Name.Raw(), err)
 		}
 
-		// Write INSTALLER marker so fpm is recognized as the manager
-		entries, _ := os.ReadDir(targetSitePackages)
-		pkgNorm := strings.ReplaceAll(pkg.Name.Normalized(), "-", "_")
-		for _, entry := range entries {
+		stagedPackages = append(stagedPackages, stagedPkg{pkg: pkg, casKey: casKey})
+	}
+
+	// All packages staged successfully — now atomically swap into site-packages
+	stagingEntries, err := os.ReadDir(stagingDir)
+	if err != nil {
+		os.RemoveAll(stagingDir)
+		return fmt.Errorf("failed to read staging directory: %w", err)
+	}
+
+	for _, entry := range stagingEntries {
+		src := filepath.Join(stagingDir, entry.Name())
+		dst := filepath.Join(targetSitePackages, entry.Name())
+		// Remove existing entry in site-packages to allow clean link
+		os.RemoveAll(dst)
+		if entry.IsDir() {
+			if err := fs.LinkDir(src, dst, fs.LinkModeAuto); err != nil {
+				os.RemoveAll(stagingDir)
+				return fmt.Errorf("failed to install %s into site-packages: %w", entry.Name(), err)
+			}
+		} else {
+			if err := fs.LinkFile(src, dst, fs.LinkModeAuto); err != nil {
+				os.RemoveAll(stagingDir)
+				return fmt.Errorf("failed to install %s into site-packages: %w", entry.Name(), err)
+			}
+		}
+	}
+
+	// Swap succeeded — write INSTALLER markers
+	for _, sp := range stagedPackages {
+		pkgNorm := strings.ReplaceAll(sp.pkg.Name.Normalized(), "-", "_")
+		spEntries, _ := os.ReadDir(targetSitePackages)
+		for _, entry := range spEntries {
 			name := entry.Name()
 			if !strings.HasSuffix(name, ".dist-info") {
 				continue
@@ -240,10 +329,10 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		}
 
 		// Track reference
-		refTracker.AddReference(envPath, casKey, pkg.Name.Normalized(), pkg.Version.String())
-		installed++
+		refTracker.AddReference(envPath, sp.casKey, sp.pkg.Name.Normalized(), sp.pkg.Version.String())
 	}
 
+	installed := len(stagedPackages)
 	totalTime := time.Since(startTime)
 
 	// Update dependency graph — track requested vs transitive
@@ -252,21 +341,21 @@ func runInstall(cmd *cobra.Command, args []string) error {
 	for _, req := range requirements {
 		requestedNames[req.Name.Normalized()] = true
 	}
-	for _, pkg := range res.Packages {
+	for _, sp := range stagedPackages {
 		var deps []string
-		for _, d := range pkg.Deps {
+		for _, d := range sp.pkg.Deps {
 			deps = append(deps, d.Name.Normalized())
 		}
-		if requestedNames[pkg.Name.Normalized()] {
-			graph.AddRequested(pkg.Name.Normalized(), pkg.Version.String(), deps)
+		if requestedNames[sp.pkg.Name.Normalized()] {
+			graph.AddRequested(sp.pkg.Name.Normalized(), sp.pkg.Version.String(), deps)
 		} else {
-			graph.AddTransitive(pkg.Name.Normalized(), pkg.Version.String(), deps)
+			graph.AddTransitive(sp.pkg.Name.Normalized(), sp.pkg.Version.String(), deps)
 		}
 	}
 	graph.Save(envPath)
 
-	// Update pyproject.toml and lockfile only when in a project (not global installs)
-	if activeVenv != nil && !flagSystem {
+	// Update pyproject.toml and lockfile only after successful installation
+	if activeVenv != nil && !flagSystem && installed > 0 {
 		pyproject, err := workspace.ReadPyProjectToml(cwd)
 		if err == nil {
 			for _, arg := range args {
@@ -275,7 +364,14 @@ func runInstall(cmd *cobra.Command, args []string) error {
 			workspace.WritePyProjectToml(cwd, pyproject)
 		}
 
-		lf := lock.Generate(res, "")
+		// Generate lockfile based only on successfully installed packages
+		installedRes := &resolver.Resolution{
+			Packages: make([]resolver.ResolvedPackage, 0, len(stagedPackages)),
+		}
+		for _, sp := range stagedPackages {
+			installedRes.Packages = append(installedRes.Packages, sp.pkg)
+		}
+		lf := lock.Generate(installedRes, "")
 		lf.Write(filepath.Join(cwd, lock.LockFileName))
 	}
 
