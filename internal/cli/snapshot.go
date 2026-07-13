@@ -10,6 +10,7 @@ import (
 	"github.com/kartikeyyadav/fpm/internal/client"
 	"github.com/kartikeyyadav/fpm/internal/config"
 	"github.com/kartikeyyadav/fpm/internal/env"
+	"github.com/kartikeyyadav/fpm/internal/fs"
 	"github.com/kartikeyyadav/fpm/internal/python"
 	"github.com/kartikeyyadav/fpm/internal/snapshot"
 	"github.com/kartikeyyadav/fpm/internal/venv"
@@ -187,6 +188,13 @@ var snapshotRestoreCmd = &cobra.Command{
 		}
 
 		fmt.Printf("Restoring snapshot %s (%s)...\n", snap.ID, snap.CreatedAt.Format("2006-01-02 15:04"))
+
+		// Acquire venv lock to prevent concurrent operations during restore
+		venvLock, lockErr := fs.LockFile(filepath.Join(envInfo.sitePackages, ".fpm"))
+		if lockErr != nil {
+			return fmt.Errorf("could not acquire environment lock: %w", lockErr)
+		}
+		defer fs.UnlockFile(venvLock)
 
 		cfg, _ := config.LoadFromCwd()
 		c := cache.New(cfg.Cache.Dir)

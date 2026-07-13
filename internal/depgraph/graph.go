@@ -35,13 +35,16 @@ func graphPath(envPath string) string {
 }
 
 // Load reads the dependency graph from disk. Returns empty graph if not found.
+// The file lock is held during the entire read+parse to prevent reading
+// partially written data from a concurrent Save.
 func Load(envPath string) *Graph {
 	g := &Graph{Packages: make(map[string]*PackageNode)}
 
 	path := graphPath(envPath)
 	lock, _ := fs.LockFileShared(path)
+	defer fs.UnlockFile(lock)
+
 	data, err := os.ReadFile(path)
-	fs.UnlockFile(lock)
 	if err != nil {
 		return g
 	}
@@ -53,9 +56,11 @@ func Load(envPath string) *Graph {
 }
 
 // Save writes the dependency graph to disk with exclusive file lock.
+// Uses a full write lock (not read lock) on the in-memory mutex to prevent
+// concurrent mutations from corrupting the serialized state.
 func (g *Graph) Save(envPath string) error {
-	g.mu.RLock()
-	defer g.mu.RUnlock()
+	g.mu.Lock()
+	defer g.mu.Unlock()
 
 	path := graphPath(envPath)
 	os.MkdirAll(filepath.Dir(path), 0755)

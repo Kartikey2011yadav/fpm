@@ -217,7 +217,11 @@ func (r *RefTracker) writeCASRef(key CASKey, ref *CASRef) error {
 }
 
 func (r *RefTracker) addToEnvIndex(envHash string, key CASKey) error {
-	os.MkdirAll(r.envRefsDir(), 0755)
+	perm := os.FileMode(0755)
+	if config.IsMultiUserMode() {
+		perm = 0775 | os.ModeSetgid
+	}
+	os.MkdirAll(r.envRefsDir(), perm)
 	path := r.envRefPath(envHash)
 	lock, err := fs.LockFile(path)
 	if err != nil {
@@ -266,7 +270,11 @@ func (r *RefTracker) removeFromEnvIndex(envHash string, key CASKey) error {
 }
 
 func (r *RefTracker) addToCASIndex(key CASKey, envPath, pkgName, version string) error {
-	os.MkdirAll(r.casRefsDir(), 0755)
+	perm := os.FileMode(0755)
+	if config.IsMultiUserMode() {
+		perm = 0775 | os.ModeSetgid
+	}
+	os.MkdirAll(r.casRefsDir(), perm)
 	path := r.casRefPath(key)
 	lock, err := fs.LockFile(path)
 	if err != nil {

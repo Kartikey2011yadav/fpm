@@ -67,7 +67,11 @@ func branchMetaPath(envPath string) string {
 }
 
 func loadBranchMeta(envPath string) *branchMeta {
-	data, err := os.ReadFile(branchMetaPath(envPath))
+	path := branchMetaPath(envPath)
+	lock, _ := fs.LockFileShared(path)
+	defer fs.UnlockFile(lock)
+
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return &branchMeta{Active: "main", Branches: map[string]string{}}
 	}
@@ -83,8 +87,15 @@ func loadBranchMeta(envPath string) *branchMeta {
 }
 
 func saveBranchMeta(envPath string, meta *branchMeta) error {
+	path := branchMetaPath(envPath)
+	lock, err := fs.LockFile(path)
+	if err != nil {
+		return err
+	}
+	defer fs.UnlockFile(lock)
+
 	data, _ := json.MarshalIndent(meta, "", "  ")
-	return os.WriteFile(branchMetaPath(envPath), data, 0644)
+	return os.WriteFile(path, data, 0644)
 }
 
 func branchStateDir(envPath, branchName string) string {
@@ -143,6 +154,13 @@ func runBranchSwitch(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no virtual environment found")
 	}
 
+	// Acquire venv lock to prevent concurrent install/remove during switch
+	venvLock, lockErr := fs.LockFile(filepath.Join(activeVenv.SitePackages, ".fpm"))
+	if lockErr != nil {
+		return fmt.Errorf("could not acquire environment lock (another operation in progress?): %w", lockErr)
+	}
+	defer fs.UnlockFile(venvLock)
+
 	targetBranch := args[0]
 	meta := loadBranchMeta(activeVenv.Path)
 
@@ -192,17 +210,10 @@ func runBranchSwitch(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Read target package list and link from cache
+	// Read target package list — packages will be restored by 'fpm sync'
 	targetPkgData, _ := os.ReadFile(filepath.Join(targetStateDir, "packages.json"))
 	var targetPkgs []string
 	json.Unmarshal(targetPkgData, &targetPkgs)
-
-	// Re-link from CAS cache
-	restored := 0
-	for _, pkgSpec := range targetPkgs {
-		_ = pkgSpec
-		restored++
-	}
 
 	meta.Active = targetBranch
 	saveBranchMeta(activeVenv.Path, meta)
@@ -272,6 +283,3 @@ func runBranchDelete(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Deleted branch \"%s\"\n", branchName)
 	return nil
 }
-
-// Suppress unused import warning for fs package (used in future CAS re-linking)
-var _ = fs.LinkModeAuto
