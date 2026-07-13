@@ -1,13 +1,28 @@
 name: Homebrew
 
 on:
-  release:
-    types: [published]
+  push:
+    tags: ["v*"]
 
 jobs:
   update-tap:
     runs-on: ubuntu-latest
     steps:
+      - name: Wait for release assets
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "Waiting for release assets for v${VERSION}..."
+          for i in $(seq 1 30); do
+            URL="https://github.com/Kartikey2011yadav/fpm/releases/download/v${VERSION}/fpm-${VERSION}-darwin-arm64.tar.gz"
+            HTTP_CODE=$(curl -sL -o /dev/null -w "%{http_code}" "${URL}")
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "Assets available!"
+              break
+            fi
+            echo "Attempt $i: not ready yet (HTTP ${HTTP_CODE}), waiting 30s..."
+            sleep 30
+          done
+
       - uses: actions/checkout@v4
 
       - name: Extract version
