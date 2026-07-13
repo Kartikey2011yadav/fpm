@@ -75,8 +75,8 @@ func UnlockFile(f *os.File) error {
 	r1, _, _ := procUnlockFile.Call(
 		uintptr(f.Fd()),
 		uintptr(0),
-		uintptr(unsafe.Pointer(ol)),
 		uintptr(1), uintptr(0),
+		uintptr(unsafe.Pointer(ol)),
 	)
 	_ = r1
 	return f.Close()
