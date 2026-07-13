@@ -2,6 +2,7 @@ package python
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,7 +15,7 @@ import (
 	"github.com/kartikeyyadav/fpm/internal/config"
 )
 
-const defaultMirror = "https://github.com/indygreg/python-build-standalone/releases/download"
+const releaseAPI = "https://api.github.com/repos/indygreg/python-build-standalone/releases?per_page=5"
 
 type ManagedVersion struct {
 	Version string
@@ -183,11 +184,49 @@ func buildDownloadURL(version string) (string, error) {
 		return "", fmt.Errorf("unsupported platform: %s/%s", os_, arch)
 	}
 
-	// Format: 20240107/cpython-3.12.1+20240107-{platform}-install_only_stripped.tar.gz
-	tag := "20240107" // This would be dynamically determined in production
-	filename := fmt.Sprintf("cpython-%s+%s-%s-install_only_stripped.tar.gz", version, tag, platform)
+	// Query GitHub API for recent releases and find a matching asset
+	req, err := http.NewRequest("GET", releaseAPI, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", "fpm")
 
-	return fmt.Sprintf("%s/%s/%s", defaultMirror, tag, filename), nil
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to query python-build-standalone releases: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("GitHub API returned %d", resp.StatusCode)
+	}
+
+	var releases []struct {
+		TagName string `json:"tag_name"`
+		Assets  []struct {
+			Name               string `json:"name"`
+			BrowserDownloadURL string `json:"browser_download_url"`
+		} `json:"assets"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
+		return "", fmt.Errorf("failed to parse releases: %w", err)
+	}
+
+	// Search for matching asset: cpython-{version}*-{platform}-install_only_stripped.tar.gz
+	// version can be "3.12" (match any 3.12.x) or "3.12.7" (exact)
+	prefix := "cpython-" + version
+	suffix := platform + "-install_only_stripped.tar.gz"
+
+	for _, rel := range releases {
+		for _, asset := range rel.Assets {
+			if strings.HasPrefix(asset.Name, prefix) && strings.HasSuffix(asset.Name, suffix) {
+				return asset.BrowserDownloadURL, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("no Python %s build found for %s/%s — check available versions at https://github.com/indygreg/python-build-standalone/releases", version, os_, arch)
 }
 
 func downloadFile(ctx context.Context, url string) (string, error) {

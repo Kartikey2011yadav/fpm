@@ -50,7 +50,7 @@ func New(opts ClientOptions) *RegistryClient {
 		opts.Concurrency = 50
 	}
 	if opts.Timeout <= 0 {
-		opts.Timeout = 30 * time.Second
+		opts.Timeout = 5 * time.Minute
 	}
 	if opts.CacheDir == "" {
 		opts.CacheDir = filepath.Join(config.CacheDir(), "http")
@@ -63,14 +63,17 @@ func New(opts ClientOptions) *RegistryClient {
 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 
-	// TLS configuration (precedence: SSL_CERT_FILE/DIR > system > bundled fallback)
+	// TLS configuration (precedence: SSL_CERT_FILE/DIR > system default)
 	if os.Getenv("FPM_INSECURE") == "1" || os.Getenv("FPM_INSECURE") == "true" {
 		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	} else {
 		pool, _ := fpmtls.LoadCertPool()
 		if pool != nil {
+			// Only override if user explicitly set SSL_CERT_FILE/DIR
 			transport.TLSClientConfig = &tls.Config{RootCAs: pool}
 		}
+		// Otherwise: leave TLS config nil so Go uses the system trust store
+		// (includes corporate CAs like Zscaler, custom enterprise roots, etc.)
 	}
 
 	// Per-host insecure bypass

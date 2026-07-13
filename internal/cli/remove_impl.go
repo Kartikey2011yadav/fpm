@@ -9,6 +9,7 @@ import (
 
 	"github.com/kartikeyyadav/fpm/internal/depgraph"
 	"github.com/kartikeyyadav/fpm/internal/env"
+	"github.com/kartikeyyadav/fpm/internal/pep508"
 	"github.com/kartikeyyadav/fpm/internal/python"
 	"github.com/kartikeyyadav/fpm/internal/venv"
 	"github.com/kartikeyyadav/fpm/internal/workspace"
@@ -59,8 +60,8 @@ func runAutoremove(cmd *cobra.Command, args []string) error {
 	for {
 		orphans := graph.Orphans()
 
-		// Fallback: if graph is empty (fpm just installed), use METADATA scan
-		if len(orphans) == 0 {
+		// Only fall back to METADATA scan if graph has no data at all
+		if len(orphans) == 0 && len(graph.Packages) == 0 {
 			orphans = findOrphanDeps(targetSitePackages, nil)
 		}
 
@@ -173,8 +174,9 @@ func runRemove(cmd *cobra.Command, args []string) error {
 	if purge && removed > 0 && targetSitePackages != "" {
 		for {
 			orphans := graph.Orphans()
-			// Fallback to METADATA scan if graph is empty (pre-existing packages)
-			if len(orphans) == 0 {
+			// Only fall back to METADATA scan if the graph has no packages at all
+			// (pre-existing environment with no graph data)
+			if len(orphans) == 0 && len(graph.Packages) == 0 {
 				orphans = findOrphanDeps(targetSitePackages, args)
 			}
 			if len(orphans) == 0 {
@@ -313,35 +315,51 @@ func findOrphanDeps(sitePackages string, removedPkgs []string) []string {
 		return nil
 	}
 
-	// Build set of remaining package names
-	remaining := make(map[string]bool)
-	for _, pkg := range result.Packages {
-		remaining[pkg.Name.Normalized()] = true
+	// Build set of top-level requested packages from pyproject.toml
+	requestedSet := make(map[string]bool)
+	cwd, _ := os.Getwd()
+	if pyproject, err := workspace.ReadPyProjectToml(cwd); err == nil {
+		for _, dep := range pyproject.Project.Dependencies {
+			req, err := pep508.ParseRequirement(dep)
+			if err == nil {
+				requestedSet[req.Name.Normalized()] = true
+			}
+		}
 	}
 
-	// Build reverse dependency map: who requires each package?
-	// Read METADATA for each remaining package to find Requires-Dist
-	requiredBy := make(map[string][]string)
+	// Build forward dependency map: package -> its deps
+	depsOf := make(map[string][]string)
 	for _, pkg := range result.Packages {
 		if pkg.Manager != env.ManagerFpm {
 			continue
 		}
 		deps := readPackageDeps(pkg.DistInfo)
-		for _, dep := range deps {
-			requiredBy[dep] = append(requiredBy[dep], pkg.Name.Normalized())
-		}
+		depsOf[pkg.Name.Normalized()] = deps
 	}
 
-	// Find packages that are:
-	// 1. Installed by fpm
-	// 2. Not required by any remaining package
-	// 3. Not one of the top-level user-installed packages (heuristic: in pyproject.toml or explicitly installed)
-	var orphans []string
+	// Compute the full set of protected packages: requested + all their transitive deps
+	protectedSet := make(map[string]bool)
+	var protect func(name string)
+	protect = func(name string) {
+		if protectedSet[name] {
+			return
+		}
+		protectedSet[name] = true
+		for _, dep := range depsOf[name] {
+			protect(dep)
+		}
+	}
+	for name := range requestedSet {
+		protect(name)
+	}
+
+	// Find packages that are not protected and not required by any remaining protected package
 	removedSet := make(map[string]bool)
 	for _, name := range removedPkgs {
 		removedSet[types.NewPackageName(name).Normalized()] = true
 	}
 
+	var orphans []string
 	for _, pkg := range result.Packages {
 		if pkg.Manager != env.ManagerFpm {
 			continue
@@ -350,12 +368,10 @@ func findOrphanDeps(sitePackages string, removedPkgs []string) []string {
 		if removedSet[norm] {
 			continue
 		}
-		parents := requiredBy[norm]
-		if len(parents) == 0 {
-			// Not required by anything — potential orphan
-			// But skip common standalone packages
-			orphans = append(orphans, pkg.Name.Raw())
+		if protectedSet[norm] {
+			continue
 		}
+		orphans = append(orphans, pkg.Name.Raw())
 	}
 
 	return orphans
