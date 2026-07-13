@@ -187,6 +187,9 @@ fpm list -a                          # see ALL packages (pip, conda, etc.)
 | `fpm snapshot create [msg]` | Capture environment state             |
 | `fpm snapshot restore <id>` | Roll back to snapshot                 |
 | `fpm snapshot diff <id>`    | Compare snapshots                     |
+| `fpm tag <name> [snap-id]`  | Name a snapshot (like git tag)        |
+| `fpm status`                | Show drift from lockfile (like git status) |
+| `fpm log`                   | Show operation history (like git log) |
 
 ### Tools & System
 

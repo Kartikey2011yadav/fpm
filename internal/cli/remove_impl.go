@@ -9,6 +9,7 @@ import (
 
 	"github.com/kartikeyyadav/fpm/internal/depgraph"
 	"github.com/kartikeyyadav/fpm/internal/env"
+	"github.com/kartikeyyadav/fpm/internal/journal"
 	"github.com/kartikeyyadav/fpm/internal/pep508"
 	"github.com/kartikeyyadav/fpm/internal/python"
 	"github.com/kartikeyyadav/fpm/internal/venv"
@@ -203,6 +204,7 @@ func runRemove(cmd *cobra.Command, args []string) error {
 	graph.Save(envPath)
 
 	if removed > 0 {
+		journal.Record(envPath, journal.OpRemove, args, "")
 		fmt.Printf("\n  %d package(s) removed.\n", removed)
 	}
 	return nil

@@ -18,6 +18,7 @@ import (
 	"github.com/kartikeyyadav/fpm/internal/depgraph"
 	"github.com/kartikeyyadav/fpm/internal/env"
 	"github.com/kartikeyyadav/fpm/internal/fs"
+	"github.com/kartikeyyadav/fpm/internal/journal"
 	"github.com/kartikeyyadav/fpm/internal/lock"
 	fpmlog "github.com/kartikeyyadav/fpm/internal/log"
 	"github.com/kartikeyyadav/fpm/internal/pep508"
@@ -374,6 +375,13 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		lf := lock.Generate(installedRes, "")
 		lf.Write(filepath.Join(cwd, lock.LockFileName))
 	}
+
+	// Record operation in journal
+	var installedNames []string
+	for _, sp := range stagedPackages {
+		installedNames = append(installedNames, sp.pkg.Name.Normalized()+"=="+sp.pkg.Version.String())
+	}
+	journal.Record(envPath, journal.OpInstall, installedNames, "")
 
 	fmt.Printf("\n  \033[32m✓ Installed %d package(s)\033[0m \033[2min %dms\033[0m\n", installed, totalTime.Milliseconds())
 	return nil
