@@ -1,11 +1,11 @@
 package cache
 
 import (
+	crypto_rand "crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -110,8 +110,10 @@ func (c *Cache) Store(wheelPath string) (CASKey, error) {
 	}
 	log.Info("cache store: adding %s from %s", key, filepath.Base(wheelPath))
 
-	// Extract to temp with unique path (PID + random), then atomic rename
-	suffix := strconv.Itoa(os.Getpid()) + "-" + strconv.FormatInt(rand.Int63(), 36)
+	// Extract to temp with unique path (PID + crypto random), then atomic rename
+	var randBuf [8]byte
+	crypto_rand.Read(randBuf[:])
+	suffix := strconv.Itoa(os.Getpid()) + "-" + hex.EncodeToString(randBuf[:])
 	tmpPath := filepath.Join(c.TmpDir(), "extract-"+hash+"-"+suffix)
 	os.RemoveAll(tmpPath)
 	if err := os.MkdirAll(tmpPath, 0755); err != nil {

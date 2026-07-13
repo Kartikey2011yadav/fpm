@@ -87,12 +87,12 @@ func ParseFilename(filename string) (*WheelFilename, error) {
 }
 
 type Metadata struct {
-	Name            string
-	Version         string
-	Summary         string
-	RequiresPython  string
-	RequiresDist    []string
-	Provides        []string
+	Name           string
+	Version        string
+	Summary        string
+	RequiresPython string
+	RequiresDist   []string
+	Provides       []string
 }
 
 func ReadMetadataFromZip(wheelPath string) (*Metadata, error) {

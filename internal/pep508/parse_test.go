@@ -89,8 +89,8 @@ func TestParseWithExtras(t *testing.T) {
 
 func TestParseWithMarkers(t *testing.T) {
 	tests := []struct {
-		input    string
-		name     string
+		input     string
+		name      string
 		hasMarker bool
 	}{
 		{`requests>=2.28; python_version >= "3.8"`, "requests", true},
@@ -116,11 +116,11 @@ func TestParseWithMarkers(t *testing.T) {
 
 func TestMarkerEvaluation(t *testing.T) {
 	env := MarkerEnvironment{
-		OSName:            "posix",
-		SysPlatform:      "linux",
-		PlatformSystem:   "Linux",
-		PythonVersion:    "3.11",
-		PythonFullVersion: "3.11.5",
+		OSName:             "posix",
+		SysPlatform:        "linux",
+		PlatformSystem:     "Linux",
+		PythonVersion:      "3.11",
+		PythonFullVersion:  "3.11.5",
 		ImplementationName: "cpython",
 	}
 

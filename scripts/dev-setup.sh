@@ -24,6 +24,10 @@ make build
 echo "Running tests..."
 go test ./... -short
 
+# Setup git hooks
+echo "Configuring git hooks..."
+make setup-hooks
+
 echo ""
 echo "Done! Binary at ./bin/fpm"
 echo "Run: ./bin/fpm version"

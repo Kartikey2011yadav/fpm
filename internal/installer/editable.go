@@ -8,9 +8,9 @@ import (
 )
 
 type EditableInstall struct {
-	SourcePath   string
-	TargetDir    string
-	PackageName  string
+	SourcePath  string
+	TargetDir   string
+	PackageName string
 }
 
 func InstallEditable(opts EditableInstall) error {

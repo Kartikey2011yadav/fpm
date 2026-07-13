@@ -3,7 +3,7 @@ MODULE := github.com/kartikeyyadav/fpm
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.1.0-dev")
 LDFLAGS := -ldflags "-s -w -X $(MODULE)/internal/cli.Version=$(VERSION)"
 
-.PHONY: build test lint clean install run
+.PHONY: build test lint clean install run setup-hooks pre-commit
 
 build:
 	go build $(LDFLAGS) -o bin/$(BINARY) ./cmd/fpm
@@ -27,6 +27,15 @@ clean:
 
 run:
 	go run ./cmd/fpm $(ARGS)
+
+setup-hooks:
+	git config core.hooksPath .githooks
+	@echo "Git hooks configured. Pre-commit runs vet + lint + short tests."
+
+pre-commit:
+	go vet ./...
+	@which golangci-lint > /dev/null 2>&1 && golangci-lint run --timeout 2m || echo "golangci-lint not installed, skipping"
+	go test ./... -short -count=1
 
 # Cross-compilation
 build-all: build-linux build-darwin build-windows

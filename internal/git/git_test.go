@@ -6,10 +6,10 @@ import (
 
 func TestParseGitURL(t *testing.T) {
 	tests := []struct {
-		input    string
-		url      string
-		ref      string
-		subdir   string
+		input  string
+		url    string
+		ref    string
+		subdir string
 	}{
 		{
 			"git+https://github.com/user/repo.git@v1.0",

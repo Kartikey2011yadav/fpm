@@ -10,15 +10,15 @@ import (
 )
 
 type Interpreter struct {
-	Path         string        `json:"path"`
+	Path         string         `json:"path"`
 	Version      pep440.Version `json:"-"`
-	VersionStr   string        `json:"version"`
-	Prefix       string        `json:"prefix"`
-	SitePackages string        `json:"site_packages"`
-	SysPaths     []string      `json:"sys_paths"`
-	Scheme       InstallScheme `json:"scheme"`
-	IsVenv       bool          `json:"is_venv"`
-	IsManaged    bool          `json:"is_managed"`
+	VersionStr   string         `json:"version"`
+	Prefix       string         `json:"prefix"`
+	SitePackages string         `json:"site_packages"`
+	SysPaths     []string       `json:"sys_paths"`
+	Scheme       InstallScheme  `json:"scheme"`
+	IsVenv       bool           `json:"is_venv"`
+	IsManaged    bool           `json:"is_managed"`
 	Impl         Implementation `json:"impl"`
 }
 
@@ -77,12 +77,12 @@ func (i Implementation) String() string {
 }
 
 type InstallScheme struct {
-	PureLib  string `json:"purelib"`
-	PlatLib  string `json:"platlib"`
-	Scripts  string `json:"scripts"`
-	Data     string `json:"data"`
-	Include  string `json:"include"`
-	Headers  string `json:"headers"`
+	PureLib string `json:"purelib"`
+	PlatLib string `json:"platlib"`
+	Scripts string `json:"scripts"`
+	Data    string `json:"data"`
+	Include string `json:"include"`
+	Headers string `json:"headers"`
 }
 
 func (i *Interpreter) PythonTag() string {

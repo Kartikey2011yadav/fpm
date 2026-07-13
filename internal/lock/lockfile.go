@@ -19,19 +19,19 @@ const (
 )
 
 type Lockfile struct {
-	Version        int              `toml:"version"`
-	RequiresPython string           `toml:"requires-python,omitempty"`
-	GeneratedAt    string           `toml:"generated-at,omitempty"`
-	Packages       []LockedPackage  `toml:"package"`
+	Version        int             `toml:"version"`
+	RequiresPython string          `toml:"requires-python,omitempty"`
+	GeneratedAt    string          `toml:"generated-at,omitempty"`
+	Packages       []LockedPackage `toml:"package"`
 }
 
 type LockedPackage struct {
-	Name         string           `toml:"name"`
-	Version      string           `toml:"version"`
-	Source       PackageSource    `toml:"source"`
-	Hashes       []string         `toml:"hashes,omitempty"`
-	Dependencies []LockedDep      `toml:"dependencies,omitempty"`
-	Markers      string           `toml:"markers,omitempty"`
+	Name         string        `toml:"name"`
+	Version      string        `toml:"version"`
+	Source       PackageSource `toml:"source"`
+	Hashes       []string      `toml:"hashes,omitempty"`
+	Dependencies []LockedDep   `toml:"dependencies,omitempty"`
+	Markers      string        `toml:"markers,omitempty"`
 }
 
 type PackageSource struct {

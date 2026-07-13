@@ -12,11 +12,11 @@ import (
 )
 
 type InstallPlan struct {
-	Package      types.PackageName
-	Version      string
-	CASKey       cache.CASKey
-	TargetDir    string
-	LinkMode     fs.LinkMode
+	Package        types.PackageName
+	Version        string
+	CASKey         cache.CASKey
+	TargetDir      string
+	LinkMode       fs.LinkMode
 	ConsoleScripts []ConsoleScript
 }
 

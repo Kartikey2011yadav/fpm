@@ -17,8 +17,11 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "stable"
+          go-version-file: "go.mod"
           cache: true
+
+      - name: Download modules
+        run: go mod download
 
       - name: Build
         run: go build ./...
@@ -40,8 +43,11 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "stable"
+          go-version-file: "go.mod"
           cache: true
+
+      - name: Download modules
+        run: go mod download
 
       - name: Go vet
         run: go vet ./...
@@ -49,7 +55,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          version: v2.1
 
       - name: Build check
         run: go build ./...
@@ -60,10 +66,13 @@ jobs:
     if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "stable"
+          go-version-file: "go.mod"
+          cache: true
 
       - name: Build all platforms
         run: make build-all

@@ -1,12 +1,16 @@
 package cli
 
 import (
+	"bufio"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"runtime"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -70,6 +74,25 @@ func runSelfUpdate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no binary found for %s/%s in release %s", runtime.GOOS, runtime.GOARCH, latest)
 	}
 
+	// Fetch checksums for verification
+	checksumsURL := fmt.Sprintf("https://github.com/Kartikey2011yadav/fpm/releases/download/%s/checksums.txt", latest)
+	var expectedHash string
+	checkResp, err := http.Get(checksumsURL)
+	if err == nil && checkResp.StatusCode == http.StatusOK {
+		scanner := bufio.NewScanner(checkResp.Body)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if strings.Contains(line, assetName) {
+				parts := strings.Fields(line)
+				if len(parts) >= 1 {
+					expectedHash = parts[0]
+				}
+				break
+			}
+		}
+		checkResp.Body.Close()
+	}
+
 	// Download
 	fmt.Printf("Downloading %s...\n", latest)
 	binResp, err := http.Get(downloadURL)
@@ -84,18 +107,29 @@ func runSelfUpdate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("cannot determine executable path: %w", err)
 	}
 
-	// Write to temp file
+	// Write to temp file with hash computation
 	tmpFile, err := os.CreateTemp("", "fpm-update-*")
 	if err != nil {
 		return err
 	}
 	defer os.Remove(tmpFile.Name())
 
-	if _, err := io.Copy(tmpFile, binResp.Body); err != nil {
+	hasher := sha256.New()
+	reader := io.TeeReader(binResp.Body, hasher)
+	if _, err := io.Copy(tmpFile, reader); err != nil {
 		tmpFile.Close()
 		return err
 	}
 	tmpFile.Close()
+
+	// Verify hash if checksums were available
+	if expectedHash != "" {
+		actualHash := hex.EncodeToString(hasher.Sum(nil))
+		if actualHash != expectedHash {
+			return fmt.Errorf("integrity check failed: expected sha256:%s, got sha256:%s", expectedHash, actualHash)
+		}
+		fmt.Println("Integrity verified (SHA256).")
+	}
 
 	// Make executable
 	os.Chmod(tmpFile.Name(), 0755)

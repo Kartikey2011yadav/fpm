@@ -14,12 +14,12 @@ import (
 )
 
 type Tool struct {
-	Name        string    `json:"name"`
-	Version     string    `json:"version"`
-	PythonVersion string  `json:"python_version"`
-	Entrypoints []string  `json:"entrypoints"`
-	InstalledAt time.Time `json:"installed_at"`
-	Path        string    `json:"path"`
+	Name          string    `json:"name"`
+	Version       string    `json:"version"`
+	PythonVersion string    `json:"python_version"`
+	Entrypoints   []string  `json:"entrypoints"`
+	InstalledAt   time.Time `json:"installed_at"`
+	Path          string    `json:"path"`
 }
 
 type Registry struct {

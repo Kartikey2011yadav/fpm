@@ -8,17 +8,17 @@ import (
 )
 
 type MarkerEnvironment struct {
-	OSName             string
-	SysPlatform        string
-	PlatformMachine    string
-	PlatformRelease    string
-	PlatformSystem     string
-	PlatformVersion    string
-	PythonVersion      string
-	PythonFullVersion  string
-	ImplementationName string
+	OSName                string
+	SysPlatform           string
+	PlatformMachine       string
+	PlatformRelease       string
+	PlatformSystem        string
+	PlatformVersion       string
+	PythonVersion         string
+	PythonFullVersion     string
+	ImplementationName    string
 	ImplementationVersion string
-	Extra              string
+	Extra                 string
 }
 
 type MarkerTree interface {
@@ -55,7 +55,7 @@ func (m *MarkerOr) String() string {
 type MarkerOp int
 
 const (
-	MarkerOpEqual        MarkerOp = iota
+	MarkerOpEqual MarkerOp = iota
 	MarkerOpNotEqual
 	MarkerOpLess
 	MarkerOpLessEqual

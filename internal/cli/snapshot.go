@@ -384,4 +384,3 @@ func countByManager(packages []snapshot.SnapshotPackage, manager string) int {
 	}
 	return count
 }
-

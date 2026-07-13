@@ -12,8 +12,8 @@ import (
 )
 
 type GitSource struct {
-	URL       string
-	Reference string // branch, tag, or commit
+	URL          string
+	Reference    string // branch, tag, or commit
 	Subdirectory string
 }
 

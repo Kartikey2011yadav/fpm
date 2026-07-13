@@ -20,7 +20,7 @@ func SuggestPackage(name string) string {
 
 	// Check common suffix/prefix mistakes
 	candidates := []string{
-		lower + "s",         // request → requests
+		lower + "s",                    // request → requests
 		strings.TrimSuffix(lower, "s"), // requestss → requests
 		strings.TrimSuffix(lower, "-py"),
 		strings.TrimSuffix(lower, "-python"),

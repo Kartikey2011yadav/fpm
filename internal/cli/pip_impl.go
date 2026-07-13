@@ -257,4 +257,3 @@ func findSystemSitePackages() []string {
 	}
 	return env.FindSitePackagesDirs(interp.SysPaths)
 }
-

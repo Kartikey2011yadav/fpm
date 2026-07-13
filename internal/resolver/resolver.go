@@ -29,7 +29,7 @@ type Resolver struct {
 type ResolutionStrategy int
 
 const (
-	StrategyHighest  ResolutionStrategy = iota
+	StrategyHighest ResolutionStrategy = iota
 	StrategyLowest
 	StrategyInstalled
 )
@@ -47,10 +47,10 @@ type Resolution struct {
 }
 
 type ResolverOptions struct {
-	Client       *client.RegistryClient
-	Scanner      *env.ScanResult
-	Immutables   []config.ImmutablePackage
-	Strategy     ResolutionStrategy
+	Client        *client.RegistryClient
+	Scanner       *env.ScanResult
+	Immutables    []config.ImmutablePackage
+	Strategy      ResolutionStrategy
 	PythonVersion string
 }
 

@@ -12,7 +12,7 @@ import (
 type CredentialType int
 
 const (
-	CredBasic  CredentialType = iota
+	CredBasic CredentialType = iota
 	CredBearer
 	CredToken
 )

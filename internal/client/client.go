@@ -2,7 +2,9 @@ package client
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,13 +14,18 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/kartikeyyadav/fpm/internal/config"
 	fpmtls "github.com/kartikeyyadav/fpm/internal/tls"
 	"github.com/kartikeyyadav/fpm/pkg/types"
+)
+
+const (
+	maxMetadataSize = 50 * 1024 * 1024       // 50 MB for package metadata
+	maxDownloadSize = 2 * 1024 * 1024 * 1024 // 2 GB for wheel downloads
 )
 
 type RegistryClient struct {
@@ -27,7 +34,6 @@ type RegistryClient struct {
 	cacheDir    string
 	concurrency int
 	semaphore   chan struct{}
-	mu          sync.Mutex
 	transport   *http.Transport
 }
 
@@ -187,14 +193,14 @@ type SimpleMeta struct {
 }
 
 type SimpleFile struct {
-	Filename      string            `json:"filename"`
-	URL           string            `json:"url"`
-	Hashes        map[string]string `json:"hashes"`
-	RequiresPython string           `json:"requires-python"`
-	Yanked        interface{}       `json:"yanked"`
-	CoreMetadata  interface{}       `json:"core-metadata"`
-	Size          int64             `json:"size"`
-	UploadTime    string            `json:"upload-time"`
+	Filename       string            `json:"filename"`
+	URL            string            `json:"url"`
+	Hashes         map[string]string `json:"hashes"`
+	RequiresPython string            `json:"requires-python"`
+	Yanked         interface{}       `json:"yanked"`
+	CoreMetadata   interface{}       `json:"core-metadata"`
+	Size           int64             `json:"size"`
+	UploadTime     string            `json:"upload-time"`
 }
 
 func (f SimpleFile) IsYanked() bool {
@@ -269,7 +275,7 @@ func (c *RegistryClient) fetchFromIndex(ctx context.Context, index config.IndexC
 		return nil, fmt.Errorf("HTTP %d for %s", resp.StatusCode, url)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxMetadataSize))
 	if err != nil {
 		return nil, fmt.Errorf("reading response from %s: %w", url, err)
 	}
@@ -324,8 +330,33 @@ func (c *RegistryClient) DownloadWheel(ctx context.Context, file SimpleFile, des
 	}
 	defer out.Close()
 
-	_, err = io.Copy(out, resp.Body)
-	return err
+	// Stream download with size limit and hash verification
+	limitedBody := io.LimitReader(resp.Body, maxDownloadSize)
+
+	expectedHash := file.SHA256()
+	if expectedHash != "" {
+		hasher := sha256.New()
+		reader := io.TeeReader(limitedBody, hasher)
+		if _, err := io.Copy(out, reader); err != nil {
+			out.Close()
+			os.Remove(destPath)
+			return fmt.Errorf("downloading %s: %w", file.Filename, err)
+		}
+		actualHash := hex.EncodeToString(hasher.Sum(nil))
+		if actualHash != expectedHash {
+			out.Close()
+			os.Remove(destPath)
+			return fmt.Errorf("hash mismatch for %s: expected sha256:%s, got sha256:%s", file.Filename, expectedHash, actualHash)
+		}
+	} else {
+		if _, err := io.Copy(out, limitedBody); err != nil {
+			out.Close()
+			os.Remove(destPath)
+			return fmt.Errorf("downloading %s: %w", file.Filename, err)
+		}
+	}
+
+	return nil
 }
 
 // HTTP cache helpers
@@ -361,7 +392,12 @@ func (c *RegistryClient) writeCache(name types.PackageName, detail *SimpleProjec
 	if err != nil {
 		return
 	}
-	os.WriteFile(path, data, 0644)
+	tmpPath := path + ".tmp." + strconv.Itoa(os.Getpid())
+	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+		os.Remove(tmpPath)
+		return
+	}
+	os.Rename(tmpPath, path)
 }
 
 // parseSimpleHTML parses PEP 503 HTML Simple API response.

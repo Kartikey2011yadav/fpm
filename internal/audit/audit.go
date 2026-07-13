@@ -105,9 +105,9 @@ type osvResponse struct {
 }
 
 type osvVuln struct {
-	ID       string       `json:"id"`
-	Summary  string       `json:"summary"`
-	Aliases  []string     `json:"aliases"`
+	ID       string        `json:"id"`
+	Summary  string        `json:"summary"`
+	Aliases  []string      `json:"aliases"`
 	Severity []osvSeverity `json:"severity"`
 	Affected []osvAffected `json:"affected"`
 }

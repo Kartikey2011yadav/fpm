@@ -1,0 +1,19 @@
+#!/bin/bash
+set -e
+
+echo "=== Pre-commit checks ==="
+
+echo "  Running go vet..."
+go vet ./...
+
+echo "  Running golangci-lint..."
+if command -v golangci-lint &> /dev/null; then
+    golangci-lint run --timeout 2m
+else
+    echo "  (golangci-lint not installed, skipping)"
+fi
+
+echo "  Running short tests..."
+go test ./... -short -count=1
+
+echo "=== All checks passed ==="

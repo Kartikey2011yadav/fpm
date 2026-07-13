@@ -1,0 +1,38 @@
+version: "2"
+
+run:
+  timeout: 5m
+  go: "1.25"
+  tests: false
+
+linters:
+  default: none
+  enable:
+    - govet
+    - staticcheck
+    - unused
+    - ineffassign
+  exclusions:
+    rules:
+      - linters:
+          - staticcheck
+        text: "ST1005|QF1012|QF1002|S1017|S1011"
+      - linters:
+          - unused
+        path: "internal/pep440/compare\\.go"
+      - linters:
+          - unused
+        path: "internal/auth/auth\\.go"
+      - linters:
+          - unused
+        path: "internal/cli/repair_impl\\.go"
+      - linters:
+          - ineffassign
+        path: "internal/cli/pip_impl\\.go"
+    paths:
+      - vendor
+      - dump
+
+formatters:
+  enable:
+    - gofmt

@@ -109,12 +109,12 @@ func (c *Cache) Prune() (*GCResult, error) {
 }
 
 type CacheSize struct {
-	Total    int64
-	CAS      int64
-	Wheels   int64
-	HTTP     int64
-	Refs     int64
-	Tmp      int64
+	Total  int64
+	CAS    int64
+	Wheels int64
+	HTTP   int64
+	Refs   int64
+	Tmp    int64
 }
 
 func (s CacheSize) String() string {

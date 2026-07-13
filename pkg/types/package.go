@@ -18,9 +18,9 @@ func NewPackageName(name string) PackageName {
 }
 
 func (p PackageName) Raw() string        { return p.raw }
-func (p PackageName) Normalized() string  { return p.normalized }
-func (p PackageName) String() string      { return p.normalized }
-func (p PackageName) IsEmpty() bool       { return p.normalized == "" }
+func (p PackageName) Normalized() string { return p.normalized }
+func (p PackageName) String() string     { return p.normalized }
+func (p PackageName) IsEmpty() bool      { return p.normalized == "" }
 
 func (p PackageName) Equal(other PackageName) bool {
 	return p.normalized == other.normalized
@@ -52,7 +52,7 @@ func NewExtraName(name string) ExtraName {
 	}
 }
 
-func (e ExtraName) Raw() string       { return e.raw }
+func (e ExtraName) Raw() string        { return e.raw }
 func (e ExtraName) Normalized() string { return e.normalized }
 func (e ExtraName) String() string     { return e.normalized }
 

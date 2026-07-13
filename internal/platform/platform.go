@@ -9,7 +9,7 @@ import (
 type OS int
 
 const (
-	Linux   OS = iota
+	Linux OS = iota
 	Darwin
 	Windows
 )
@@ -30,7 +30,7 @@ func (o OS) String() string {
 type Arch int
 
 const (
-	X86_64  Arch = iota
+	X86_64 Arch = iota
 	Aarch64
 	X86
 	Armv7l

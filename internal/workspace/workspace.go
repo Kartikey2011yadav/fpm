@@ -20,18 +20,18 @@ type Member struct {
 }
 
 type PyProjectToml struct {
-	Project  ProjectTable  `toml:"project"`
-	Tool     ToolTable     `toml:"tool"`
+	Project ProjectTable `toml:"project"`
+	Tool    ToolTable    `toml:"tool"`
 }
 
 type ProjectTable struct {
-	Name            string   `toml:"name"`
-	Version         string   `toml:"version"`
-	Description     string   `toml:"description"`
-	RequiresPython  string   `toml:"requires-python"`
-	Dependencies    []string `toml:"dependencies"`
-	License         string   `toml:"license"`
-	Authors         []Author `toml:"authors"`
+	Name           string   `toml:"name"`
+	Version        string   `toml:"version"`
+	Description    string   `toml:"description"`
+	RequiresPython string   `toml:"requires-python"`
+	Dependencies   []string `toml:"dependencies"`
+	License        string   `toml:"license"`
+	Authors        []Author `toml:"authors"`
 }
 
 type Author struct {

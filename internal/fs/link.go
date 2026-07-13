@@ -12,10 +12,10 @@ type LinkMode int
 
 const (
 	LinkModeAuto     LinkMode = iota
-	LinkModeReflink          // CoW clone (APFS, btrfs, xfs)
-	LinkModeHardlink         // os.Link
-	LinkModeCopy             // full copy
-	LinkModeSymlink          // os.Symlink
+	LinkModeReflink           // CoW clone (APFS, btrfs, xfs)
+	LinkModeHardlink          // os.Link
+	LinkModeCopy              // full copy
+	LinkModeSymlink           // os.Symlink
 )
 
 func (m LinkMode) String() string {

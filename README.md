@@ -121,8 +121,11 @@ $ fpm install request
 ## Install
 
 ```bash
-# Interactive installer (recommended)
+# Interactive installer (recommended, verifies SHA256)
 curl -fsSL https://raw.githubusercontent.com/Kartikey2011yadav/fpm/main/install.sh | bash
+
+# Windows PowerShell
+irm https://raw.githubusercontent.com/Kartikey2011yadav/fpm/main/install.ps1 | iex
 
 # Other methods
 pip install fpm-pkg                                      # PyPI
@@ -187,13 +190,16 @@ fpm list -a                          # see ALL packages (pip, conda, etc.)
 
 ### Tools & System
 
-| Command                  | Description                     |
-| ------------------------ | ------------------------------- |
-| `fpm tool run <pkg>`     | Run tool (cached ephemeral env) |
-| `fpm tool install <pkg>` | Install CLI tool permanently    |
-| `fpm cache gc`           | Remove unused packages          |
-| `fpm repair`             | Diagnose + fix issues           |
-| `fpm config show`        | Display all settings            |
+| Command                    | Description                             |
+| -------------------------- | --------------------------------------- |
+| `fpm tool run <pkg>`       | Run tool (cached ephemeral env)         |
+| `fpm tool install <pkg>`   | Install CLI tool permanently            |
+| `fpm cache gc`             | Remove unused packages                  |
+| `fpm repair`               | Diagnose + fix issues                   |
+| `fpm config show`          | Display all settings                    |
+| `fpm self update`          | Update fpm to latest (SHA256 verified)  |
+| `fpm completion [shell]`   | Generate shell completions (bash/zsh/fish/powershell) |
+| `fpm docs [topic]`         | Open docs in browser or show topic help |
 
 ### Flags
 

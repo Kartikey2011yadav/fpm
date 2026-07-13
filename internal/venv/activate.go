@@ -8,11 +8,11 @@ import (
 
 func writeActivationScripts(binDir, venvPath, prompt string) error {
 	scripts := map[string]string{
-		"activate":      bashActivateScript(venvPath, binDir, prompt),
-		"activate.fish": fishActivateScript(venvPath, binDir, prompt),
-		"activate.csh":  cshActivateScript(venvPath, binDir, prompt),
-		"activate.ps1":  powershellActivateScript(venvPath, binDir, prompt),
-		"activate.bat":  batActivateScript(venvPath, binDir, prompt),
+		"activate":       bashActivateScript(venvPath, binDir, prompt),
+		"activate.fish":  fishActivateScript(venvPath, binDir, prompt),
+		"activate.csh":   cshActivateScript(venvPath, binDir, prompt),
+		"activate.ps1":   powershellActivateScript(venvPath, binDir, prompt),
+		"activate.bat":   batActivateScript(venvPath, binDir, prompt),
 		"deactivate.bat": batDeactivateScript(),
 	}
 

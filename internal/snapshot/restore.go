@@ -25,20 +25,20 @@ type RestoreResult struct {
 }
 
 type DriftLogEntry struct {
-	Package    string
-	Manager    string
-	Expected   string
-	Actual     string
-	Status     DriftStatus
+	Package  string
+	Manager  string
+	Expected string
+	Actual   string
+	Status   DriftStatus
 }
 
 type DriftStatus int
 
 const (
 	DriftMatch   DriftStatus = iota // Package matches snapshot
-	DriftChanged                     // Version changed in external manager
-	DriftMissing                     // Package missing from environment
-	DriftNew                         // New package not in snapshot
+	DriftChanged                    // Version changed in external manager
+	DriftMissing                    // Package missing from environment
+	DriftNew                        // New package not in snapshot
 )
 
 func (d DriftStatus) Symbol() string {
@@ -59,9 +59,9 @@ func (d DriftStatus) Symbol() string {
 type SystemConflictStrategy int
 
 const (
-	StrategyRollbackSystem  SystemConflictStrategy = iota // Also restore system packages
-	StrategyOverrideLocal                                 // Install conflicting deps at project level
-	StrategyAbort                                         // User will fix manually
+	StrategyRollbackSystem SystemConflictStrategy = iota // Also restore system packages
+	StrategyOverrideLocal                                // Install conflicting deps at project level
+	StrategyAbort                                        // User will fix manually
 )
 
 type SystemConflict struct {

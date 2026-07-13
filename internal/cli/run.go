@@ -5,9 +5,9 @@ import (
 )
 
 var runCmd = &cobra.Command{
-	Use:                "run [command] [args...]",
-	Short:              "Run a command in the managed environment",
-	Long:               `Execute a command within the project's virtual environment, ensuring all managed packages are available on the path.`,
+	Use:   "run [command] [args...]",
+	Short: "Run a command in the managed environment",
+	Long:  `Execute a command within the project's virtual environment, ensuring all managed packages are available on the path.`,
 	Example: `  # Run a script
   fpm run python app.py
 
@@ -19,7 +19,7 @@ var runCmd = &cobra.Command{
 	Args:               cobra.MinimumNArgs(1),
 	DisableFlagParsing: true,
 	GroupID:            "project",
-	RunE:              nil, // implemented in run_impl.go
+	RunE:               nil, // implemented in run_impl.go
 }
 
 func init() {

@@ -17,9 +17,9 @@ import (
 const defaultMirror = "https://github.com/indygreg/python-build-standalone/releases/download"
 
 type ManagedVersion struct {
-	Version  string
-	Path     string
-	Current  bool
+	Version string
+	Path    string
+	Current bool
 }
 
 func ListManaged() ([]ManagedVersion, error) {

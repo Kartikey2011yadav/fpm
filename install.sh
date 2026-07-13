@@ -369,6 +369,40 @@ download_and_install() {
     local size=$(du -h "$TEMP_FILE" | awk '{print $1}')
     info "Downloaded (${size})"
 
+    # Verify integrity via checksums.txt
+    step "Verifying integrity..."
+    CHECKSUM_URL="https://github.com/${REPO}/releases/download/v${VERSION}/checksums.txt"
+    CHECKSUMS=$(curl -fsSL "$CHECKSUM_URL" 2>/dev/null || echo "")
+
+    if [ -n "$CHECKSUMS" ]; then
+        EXPECTED=$(echo "$CHECKSUMS" | grep "fpm-.*${OS}-${ARCH}" | head -1 | awk '{print $1}')
+        if [ -n "$EXPECTED" ]; then
+            if command -v sha256sum &> /dev/null; then
+                ACTUAL=$(sha256sum "$TEMP_FILE" | awk '{print $1}')
+            elif command -v shasum &> /dev/null; then
+                ACTUAL=$(shasum -a 256 "$TEMP_FILE" | awk '{print $1}')
+            else
+                ACTUAL=""
+            fi
+            if [ -n "$ACTUAL" ]; then
+                if [ "$ACTUAL" != "$EXPECTED" ]; then
+                    error "Checksum mismatch!"
+                    error "  Expected: $EXPECTED"
+                    error "  Got:      $ACTUAL"
+                    rm -f "$TEMP_FILE"
+                    exit 1
+                fi
+                info "Integrity verified (SHA256)"
+            else
+                warn "No SHA256 tool available (skipping verification)"
+            fi
+        else
+            warn "No checksum found for this platform (skipping verification)"
+        fi
+    else
+        warn "Could not download checksums (skipping verification)"
+    fi
+
     # Create directories
     mkdir -p "$CACHE_DIR" "$DATA_DIR" "$CONFIG_DIR" "$TOOL_BIN_DIR" 2>/dev/null || true
     mkdir -p "$BIN_DIR" 2>/dev/null || true

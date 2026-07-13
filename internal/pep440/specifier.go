@@ -9,14 +9,14 @@ import (
 type Operator int
 
 const (
-	OpEqual          Operator = iota // ==
-	OpNotEqual                       // !=
-	OpLessThan                       // <
-	OpLessThanEqual                  // <=
-	OpGreaterThan                    // >
-	OpGreaterThanEqual               // >=
-	OpCompatible                     // ~=
-	OpArbitrary                      // ===
+	OpEqual            Operator = iota // ==
+	OpNotEqual                         // !=
+	OpLessThan                         // <
+	OpLessThanEqual                    // <=
+	OpGreaterThan                      // >
+	OpGreaterThanEqual                 // >=
+	OpCompatible                       // ~=
+	OpArbitrary                        // ===
 )
 
 func (op Operator) String() string {

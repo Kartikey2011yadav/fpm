@@ -30,10 +30,10 @@ type Snapshot struct {
 }
 
 type SnapshotPackage struct {
-	Name    string `json:"name"`
-	Version string `json:"version"`
-	Manager string `json:"manager"`
-	CASKey  string `json:"cas_key,omitempty"`
+	Name     string `json:"name"`
+	Version  string `json:"version"`
+	Manager  string `json:"manager"`
+	CASKey   string `json:"cas_key,omitempty"`
 	Location string `json:"location"`
 }
 
@@ -253,16 +253,16 @@ func DiffSnapshots(old, new *Snapshot) *SnapshotDiff {
 
 // DriftReport compares a snapshot against the current environment state
 type DriftReport struct {
-	Matching  []SnapshotPackage
-	Drifted   []DriftEntry
-	Missing   []SnapshotPackage
-	New       []env.InstalledPackage
+	Matching []SnapshotPackage
+	Drifted  []DriftEntry
+	Missing  []SnapshotPackage
+	New      []env.InstalledPackage
 }
 
 type DriftEntry struct {
-	Package         SnapshotPackage
-	CurrentVersion  string
-	CurrentManager  string
+	Package        SnapshotPackage
+	CurrentVersion string
+	CurrentManager string
 }
 
 func (s *Store) DetectDrift(snapID string, currentScan *env.ScanResult) (*DriftReport, error) {
