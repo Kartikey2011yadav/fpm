@@ -20,25 +20,30 @@ jobs:
           VERSION=${{ steps.version.outputs.version }}
           BASE="https://github.com/Kartikey2011yadav/fpm/releases/download/v${VERSION}"
 
-          curl -sL "${BASE}/fpm-${VERSION}-darwin-amd64.tar.gz" | sha256sum | awk '{print $1}' > /tmp/darwin-amd64.sha256
-          curl -sL "${BASE}/fpm-${VERSION}-darwin-arm64.tar.gz" | sha256sum | awk '{print $1}' > /tmp/darwin-arm64.sha256
-          curl -sL "${BASE}/fpm-${VERSION}-linux-amd64.tar.gz" | sha256sum | awk '{print $1}' > /tmp/linux-amd64.sha256
-          curl -sL "${BASE}/fpm-${VERSION}-linux-arm64.tar.gz" | sha256sum | awk '{print $1}' > /tmp/linux-arm64.sha256
+          for PLATFORM in darwin-amd64 darwin-arm64 linux-amd64 linux-arm64; do
+            URL="${BASE}/fpm-${VERSION}-${PLATFORM}.tar.gz"
+            echo "Downloading ${URL}..."
+            HTTP_CODE=$(curl -sL -o /tmp/${PLATFORM}.tar.gz -w "%{http_code}" "${URL}")
+            if [ "$HTTP_CODE" != "200" ]; then
+              echo "ERROR: Failed to download ${PLATFORM} (HTTP ${HTTP_CODE})"
+              exit 1
+            fi
+            SHA=$(sha256sum /tmp/${PLATFORM}.tar.gz | awk '{print $1}')
+            echo "${PLATFORM//-/_}=${SHA}" >> $GITHUB_OUTPUT
+          done
 
-          echo "darwin_amd64=$(cat /tmp/darwin-amd64.sha256)" >> $GITHUB_OUTPUT
-          echo "darwin_arm64=$(cat /tmp/darwin-arm64.sha256)" >> $GITHUB_OUTPUT
-          echo "linux_amd64=$(cat /tmp/linux-amd64.sha256)" >> $GITHUB_OUTPUT
-          echo "linux_arm64=$(cat /tmp/linux-arm64.sha256)" >> $GITHUB_OUTPUT
-
-      - name: Generate formula
+      - name: Generate and push formula to tap
+        env:
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
         run: |
           VERSION=${{ steps.version.outputs.version }}
-          cat > /tmp/fpm.rb << FORMULA
+
+          cat > /tmp/fpm.rb << EOF
           class Fpm < Formula
             desc "Fast Package Manager for Python"
             homepage "https://github.com/Kartikey2011yadav/fpm"
-            version "${VERSION}"
             license "MIT"
+            version "${VERSION}"
 
             on_macos do
               on_intel do
@@ -70,16 +75,15 @@ jobs:
               assert_match "fpm", shell_output("#{bin}/fpm --version")
             end
           end
-          FORMULA
+          EOF
 
-      - name: Push to homebrew-tap
-        uses: dmnemec/copy_file_to_another_repo_action@main
-        env:
-          API_TOKEN_GITHUB: ${{ secrets.TAP_GITHUB_TOKEN }}
-        with:
-          source_file: /tmp/fpm.rb
-          destination_repo: Kartikey2011yadav/homebrew-tap
-          destination_folder: Formula
-          user_email: "github-actions@github.com"
-          user_name: "github-actions"
-          commit_message: "Update fpm to v${{ steps.version.outputs.version }}"
+          # Clone tap, update formula, push
+          git clone "https://x-access-token:${TAP_GITHUB_TOKEN}@github.com/Kartikey2011yadav/homebrew-tap.git" /tmp/tap
+          mkdir -p /tmp/tap/Formula
+          cp /tmp/fpm.rb /tmp/tap/Formula/fpm.rb
+          cd /tmp/tap
+          git config user.email "github-actions@github.com"
+          git config user.name "github-actions"
+          git add Formula/fpm.rb
+          git commit -m "Update fpm to v${VERSION}" || echo "No changes"
+          git push

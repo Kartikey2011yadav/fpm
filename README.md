@@ -128,7 +128,7 @@ curl -fsSL https://raw.githubusercontent.com/Kartikey2011yadav/fpm/main/install.
 irm https://raw.githubusercontent.com/Kartikey2011yadav/fpm/main/install.ps1 | iex
 
 # Other methods
-pip install fpm-pkg                                      # PyPI
+pip install fpm-cli                                      # PyPI
 brew install kartikeyyadav/tap/fpm                       # Homebrew
 go install github.com/kartikeyyadav/fpm/cmd/fpm@latest   # Go
 docker run ghcr.io/kartikey2011yadav/fpm --version       # Docker

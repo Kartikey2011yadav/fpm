@@ -1,4 +1,4 @@
-# fpm-pkg
+# fpm-cli
 
 **Fast Package Manager for Python** — binary distribution via pip.
 
@@ -8,7 +8,7 @@ your platform (macOS, Linux, Windows — Intel and ARM).
 ## Installation
 
 ```bash
-pip install fpm-pkg
+pip install fpm-cli
 ```
 
 ## Usage

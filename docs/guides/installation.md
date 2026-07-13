@@ -24,7 +24,7 @@ curl -fsSL https://raw.githubusercontent.com/Kartikey2011yadav/fpm/main/install.
 | Method | Command | Best for |
 |--------|---------|----------|
 | Install script | `curl ... \| bash` | Most users (interactive) |
-| pip | `pip install fpm-pkg` | Python developers |
+| pip | `pip install fpm-cli` | Python developers |
 | Go | `go install .../cmd/fpm@latest` | Go developers |
 | Homebrew | `brew install kartikeyyadav/tap/fpm` | macOS users |
 | Docker | `docker run ghcr.io/kartikey2011yadav/fpm` | Containers/CI |
@@ -35,7 +35,7 @@ curl -fsSL https://raw.githubusercontent.com/Kartikey2011yadav/fpm/main/install.
 ## pip
 
 ```bash
-pip install fpm-pkg
+pip install fpm-cli
 ```
 
 This installs a thin Python wrapper that automatically downloads the correct
@@ -230,7 +230,7 @@ curl -fsSL https://raw.githubusercontent.com/Kartikey2011yadav/fpm/main/install.
 
 # Or via package manager
 brew upgrade fpm               # Homebrew
-pip install --upgrade fpm-pkg  # pip
+pip install --upgrade fpm-cli  # pip
 go install .../cmd/fpm@latest  # Go
 ```
 
@@ -266,7 +266,7 @@ echo 'set -gx PATH "$HOME/.local/bin" $PATH' >> ~/.config/fish/config.fish
 
 ### pip install fails with "not found"
 
-The package `fpm-pkg` needs to be published to PyPI first (happens on first release).
+The package `fpm-cli` needs to be published to PyPI first (happens on first release).
 Until then, use the install script or `go install`.
 
 ### Docker image not found

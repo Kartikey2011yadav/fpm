@@ -33,7 +33,7 @@ Go to: fpm repo → Settings → Secrets and variables → Actions → New repos
 
 1. Go to https://pypi.org → Account → Publishing → Add new pending publisher
 2. Fill in:
-   - PyPI project name: `fpm-pkg`
+   - PyPI project name: `fpm-cli`
    - Owner: `Kartikey2011yadav`
    - Repository name: `fpm`
    - Workflow name: `pypi.yml`
@@ -91,7 +91,7 @@ Check GitHub Actions for these workflows:
 |----------|---------|--------------|
 | `release.yml` | `v*` tag | GoReleaser → GitHub Release with binaries + checksums |
 | `docker.yml` | `v*` tag | Multi-arch Docker image → ghcr.io |
-| `pypi.yml` | `v*` tag | Publishes `fpm-pkg` to PyPI |
+| `pypi.yml` | `v*` tag | Publishes `fpm-cli` to PyPI |
 | `homebrew.yml` | Release published | Updates Formula in homebrew-tap with SHA256 |
 
 ### Step 5: Verify distribution
@@ -105,7 +105,7 @@ docker pull ghcr.io/kartikey2011yadav/fpm:0.2.0
 docker run --rm ghcr.io/kartikey2011yadav/fpm:0.2.0 --version
 
 # PyPI
-pip install fpm-pkg==0.2.0
+pip install fpm-cli==0.2.0
 fpm --version
 
 # Homebrew (after tap updates)
@@ -171,7 +171,7 @@ Pre-releases: `0.2.0-beta.1` (GoReleaser auto-marks as prerelease)
 ### `pypi.yml` — Python Package
 
 - **Trigger:** Push tag `v*`
-- **Package:** `fpm-pkg` (wrapper that downloads Go binary)
+- **Package:** `fpm-cli` (wrapper that downloads Go binary)
 - **Auth:** PyPI trusted publisher (OIDC, no token needed)
 
 ### `homebrew.yml` — Homebrew Formula
@@ -222,7 +222,7 @@ git merge hotfix/0.2.1
 
 - Verify trusted publisher is configured on pypi.org
 - Check workflow name matches (`pypi.yml`)
-- First publish must claim the name `fpm-pkg`
+- First publish must claim the name `fpm-cli`
 
 ### Homebrew tap not updating
 

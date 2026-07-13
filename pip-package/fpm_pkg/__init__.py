@@ -1,4 +1,4 @@
-"""fpm-pkg: Fast Package Manager for Python — binary wrapper.
+"""fpm-cli: Fast Package Manager for Python — binary wrapper.
 
 This package downloads and installs the fpm binary for your platform.
 After installation, the `fpm` command is available in your PATH.

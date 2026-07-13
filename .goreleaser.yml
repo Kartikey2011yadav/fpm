@@ -46,7 +46,7 @@ changelog:
 
 release:
   github:
-    owner: kartikeyyadav
+    owner: Kartikey2011yadav
     name: fpm
   draft: false
   prerelease: auto

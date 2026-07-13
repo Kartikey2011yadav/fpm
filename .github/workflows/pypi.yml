@@ -24,8 +24,18 @@ jobs:
       - name: Update package version
         run: |
           cd pip-package
-          sed -i "s/version = \".*\"/version = \"${{ steps.version.outputs.version }}\"/" pyproject.toml
-          sed -i "s/__version__ = \".*\"/__version__ = \"${{ steps.version.outputs.version }}\"/" fpm_pkg/__init__.py
+          VERSION="${{ steps.version.outputs.version }}"
+          python -c "
+          import re, pathlib
+
+          # Update pyproject.toml
+          toml = pathlib.Path('pyproject.toml')
+          toml.write_text(re.sub(r'version = \".*?\"', f'version = \"${VERSION}\"', toml.read_text(), count=1))
+
+          # Update __init__.py
+          init = pathlib.Path('fpm_pkg/__init__.py')
+          init.write_text(re.sub(r'__version__ = \".*?\"', f'__version__ = \"${VERSION}\"', init.read_text(), count=1))
+          "
 
       - name: Build package
         run: |
