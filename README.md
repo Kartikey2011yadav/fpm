@@ -18,6 +18,8 @@ nothing.**
 [![Go](https://img.shields.io/badge/Go-1.25-blue)](https://go.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)]()
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![GitHub Discussions](https://img.shields.io/github/discussions/Kartikey2011yadav/fpm)](https://github.com/Kartikey2011yadav/fpm/discussions)
 
 [Install](#install) &bull; [Quick Start](#quick-start) &bull;
 [Documentation](docs/concepts/README.md) &bull; [Why fpm?](#why-fpm)
@@ -317,7 +319,23 @@ config > defaults
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
+We welcome contributions of all kinds! See [CONTRIBUTING.md](CONTRIBUTING.md)
+for setup and guidelines.
+
+- [Good First Issues](https://github.com/Kartikey2011yadav/fpm/labels/good%20first%20issue) — great starting points
+- [Feature Roadmap](docs/roadmap-git-features.md) — planned features open for implementation
+- [Discussions](https://github.com/Kartikey2011yadav/fpm/discussions) — questions, ideas, feedback
+
+```bash
+git clone https://github.com/Kartikey2011yadav/fpm.git
+cd fpm && ./scripts/dev-setup.sh
+```
+
+## Community
+
+- [GitHub Discussions](https://github.com/Kartikey2011yadav/fpm/discussions) — ask questions, share use cases
+- [Changelog](CHANGELOG.md) — what's new in each release
+- [Security Policy](SECURITY.md) — reporting vulnerabilities
 
 ## License
 
