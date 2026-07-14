@@ -36,13 +36,18 @@ func runCacheGC(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if result.RemovedItems == 0 {
+	if result.RemovedItems == 0 && result.SkippedItems == 0 {
 		fmt.Println("No unreferenced packages to clean up.")
 		return nil
 	}
 
-	fmt.Printf("Removed %d unreferenced packages, freed %s.\n",
-		result.RemovedItems, formatBytes(result.FreedBytes))
+	if result.RemovedItems > 0 {
+		fmt.Printf("Removed %d unreferenced packages, freed %s.\n",
+			result.RemovedItems, formatBytes(result.FreedBytes))
+	}
+	if result.SkippedItems > 0 {
+		fmt.Printf("Skipped %d packages (permission denied). Try with sudo.\n", result.SkippedItems)
+	}
 	return nil
 }
 

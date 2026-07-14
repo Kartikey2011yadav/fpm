@@ -13,6 +13,7 @@ type GCOptions struct {
 
 type GCResult struct {
 	RemovedItems int
+	SkippedItems int
 	FreedBytes   int64
 	Entries      []UnusedEntry
 }
@@ -45,9 +46,11 @@ func (c *Cache) GC(opts GCOptions) (*GCResult, error) {
 
 		if !opts.DryRun {
 			if err := c.Remove(entry.Key); err != nil {
+				if os.IsPermission(err) {
+					result.SkippedItems++
+				}
 				continue
 			}
-			// Also remove the CAS ref file
 			refPath := NewRefTracker(c).casRefPath(entry.Key)
 			os.Remove(refPath)
 			result.RemovedItems++

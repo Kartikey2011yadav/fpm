@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -108,10 +109,24 @@ func runInstall(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("cannot determine site-packages directory. Run 'fpm init' to create a project")
 	}
 
+	// Pre-flight: check write permissions before attempting install
+	if err := fs.CheckWritable(targetSitePackages); err != nil {
+		var permErr *fs.PermissionError
+		if errors.As(err, &permErr) {
+			return fpmErrors.WithHint(fpmErrors.New(permErr.Error()), permErr.Hint())
+		}
+		return err
+	}
+
 	// Acquire venv-level lock to prevent concurrent install corruption
 	venvLock, lockErr := fs.LockFile(filepath.Join(targetSitePackages, ".fpm"))
 	if lockErr != nil {
-		return fmt.Errorf("could not acquire environment lock: %w", lockErr)
+		if fs.IsPermissionError(lockErr) {
+			return fpmErrors.WithHint(
+				fpmErrors.New("permission denied: cannot lock environment"),
+				"Try: sudo fpm install ...\n          Or use a virtual environment (fpm venv).")
+		}
+		return fmt.Errorf("could not acquire environment lock (another fpm process may be running): %w", lockErr)
 	}
 	defer fs.UnlockFile(venvLock)
 

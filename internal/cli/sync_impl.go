@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -39,10 +40,22 @@ func runSync(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no virtual environment found.\nRun 'fpm venv' to create one, or 'fpm init' to start a new project")
 	}
 
+	// Pre-flight: check write permissions
+	if err := fs.CheckWritable(activeVenv.SitePackages); err != nil {
+		var permErr *fs.PermissionError
+		if errors.As(err, &permErr) {
+			return fmt.Errorf("%s\n\n  hint: %s", permErr.Error(), permErr.Hint())
+		}
+		return err
+	}
+
 	// Acquire venv-level lock to prevent concurrent sync corruption
 	venvLock, lockErr := fs.LockFile(filepath.Join(activeVenv.SitePackages, ".fpm"))
 	if lockErr != nil {
-		return fmt.Errorf("could not acquire environment lock: %w", lockErr)
+		if fs.IsPermissionError(lockErr) {
+			return fmt.Errorf("permission denied: cannot lock environment\n\n  hint: Try: sudo fpm sync")
+		}
+		return fmt.Errorf("could not acquire environment lock (another fpm process may be running): %w", lockErr)
 	}
 	defer fs.UnlockFile(venvLock)
 

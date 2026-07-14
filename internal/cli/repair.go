@@ -58,6 +58,7 @@ var configInitCmd = &cobra.Command{
 }
 
 func init() {
+	repairCmd.Flags().Bool("fix-permissions", false, "Fix directory/file permissions (multi-user mode)")
 	configCmd.AddCommand(configShowCmd)
 	configCmd.AddCommand(configSetCmd)
 	configCmd.AddCommand(configInitCmd)

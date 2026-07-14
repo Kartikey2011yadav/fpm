@@ -130,6 +130,27 @@ func runRepair(cmd *cobra.Command, args []string) error {
 		fmt.Printf("    \033[2m●\033[0m No cached interpreter data (will be populated on first use)\n")
 	}
 
+	// 8. Multi-user mode checks
+	if config.IsMultiUserMode() {
+		fmt.Println("\n  Checking multi-user mode...")
+		fmt.Printf("    \033[32m✓\033[0m Multi-user mode active\n")
+		fmt.Printf("    Shared cache: %s\n", config.CacheDir())
+
+		fixPerms, _ := cmd.Flags().GetBool("fix-permissions")
+		if fixPerms {
+			fmt.Println("    Fixing permissions...")
+			permFixed := fixMultiUserPermissions(config.CacheDir())
+			fixed += permFixed
+			if permFixed > 0 {
+				fmt.Printf("    \033[32m✓\033[0m Fixed permissions on %d items\n", permFixed)
+			} else {
+				fmt.Printf("    \033[32m✓\033[0m Permissions already correct\n")
+			}
+		} else {
+			fmt.Printf("    \033[2m●\033[0m Run 'fpm repair --fix-permissions' to fix shared cache permissions\n")
+		}
+	}
+
 	// Summary
 	fmt.Println()
 	if issues == 0 {
@@ -142,6 +163,30 @@ func runRepair(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+func fixMultiUserPermissions(cacheRoot string) int {
+	fixed := 0
+	filepath.Walk(cacheRoot, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() {
+			want := os.FileMode(0775) | os.ModeSetgid
+			if info.Mode().Perm() != want.Perm() || info.Mode()&os.ModeSetgid == 0 {
+				os.Chmod(path, want)
+				fixed++
+			}
+		} else {
+			want := os.FileMode(0664)
+			if info.Mode().Perm() != want.Perm() {
+				os.Chmod(path, want)
+				fixed++
+			}
+		}
+		return nil
+	})
+	return fixed
 }
 
 func runConfigShow(cmd *cobra.Command, args []string) error {

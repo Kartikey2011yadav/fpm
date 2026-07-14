@@ -41,7 +41,7 @@ func journalPath(envPath string) string {
 
 func Record(envPath string, op Operation, packages []string, message string) {
 	path := journalPath(envPath)
-	os.MkdirAll(filepath.Dir(path), 0755)
+	os.MkdirAll(filepath.Dir(path), 0755) // journal is always user-local
 
 	entry := Entry{
 		ID:        generateID(),

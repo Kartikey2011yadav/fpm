@@ -11,7 +11,7 @@ import (
 
 func LockFile(path string) (*os.File, error) {
 	lockPath := path + ".lock"
-	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0644)
+	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0666)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +44,7 @@ func LockFile(path string) (*os.File, error) {
 
 func LockFileShared(path string) (*os.File, error) {
 	lockPath := path + ".lock"
-	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDONLY, 0644)
+	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDONLY, 0666)
 	if err != nil {
 		return nil, err
 	}
