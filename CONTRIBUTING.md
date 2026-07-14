@@ -52,6 +52,18 @@ Run short tests only (used by pre-commit hook):
 make test-short
 ```
 
+Run with race detector (especially for depgraph/concurrency tests):
+
+```bash
+go test ./internal/depgraph/ -race -v
+```
+
+Run the E2E integration test script:
+
+```bash
+./scripts/test-depgraph-e2e.sh --insecure  # if behind corporate proxy
+```
+
 ## Code Style
 
 - Follow standard Go conventions (`gofmt`, `go vet`)

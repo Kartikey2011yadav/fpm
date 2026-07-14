@@ -22,7 +22,8 @@ Available topics:
   snapshots    Environment snapshots (create, restore, diff)
   resolver     Dependency resolution algorithm
   venv         Virtual environment management
-  install      Installation methods`,
+  install      Installation methods
+  workflow     Git-like environment workflow (stash, branch, bisect)`,
 	GroupID: "advanced",
 	Args:    cobra.MaximumNArgs(1),
 	RunE:    runDocs,
@@ -149,6 +150,36 @@ Other methods:
 
 Update:
   fpm self update`,
+
+	"workflow": `Git-Like Environment Workflow
+==============================
+
+fpm treats environments like git treats code — versioned, diffable, reversible.
+
+Status & History:
+  fpm status              Show what changed vs lockfile (added/removed/changed)
+  fpm log                 Show operation history (install/remove/upgrade)
+  fpm log --oneline       Compact view with operation IDs
+  fpm blame <pkg>         Why was this package installed? By whom?
+
+Save & Restore:
+  fpm stash               Save unlocked packages, restore clean lockfile state
+  fpm stash pop           Bring stashed packages back
+  fpm stash list          See stash stack
+  fpm snapshot create     Capture full environment state
+  fpm snapshot restore    Roll back to any point in time
+  fpm tag <name>          Name a snapshot for easy reference
+
+Branching & Experimentation:
+  fpm branch create <n>   Create a named env branch
+  fpm branch switch <n>   Switch to a different branch
+  fpm branch list         See all branches
+  fpm cherry-pick <snap> <pkg>   Restore one package from a snapshot
+
+Debugging:
+  fpm bisect start        Begin binary search for breaking change
+  fpm bisect good/bad     Mark snapshots as working/broken
+  fpm revert <id>         Undo a past operation by journal ID`,
 }
 
 func runDocs(cmd *cobra.Command, args []string) error {

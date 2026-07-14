@@ -106,6 +106,34 @@ No other Python package manager tracks this. pip/uv leave orphans forever.
 fpm stores every package once (content-addressable by SHA256) and links it into
 projects via reflink/hardlink. 10 projects using `requests` = one copy on disk.
 
+### Git-Like Environment Management
+
+fpm treats your Python environment like git treats source code — versioned,
+diffable, and reversible:
+
+```bash
+$ fpm status                          # what changed since lockfile?
+  added: httpx 0.27.0
+  missing: flask 3.0.0
+
+$ fpm stash                           # save changes, go clean
+Stashed 1 package(s)
+
+$ fpm stash pop                       # bring changes back
+
+$ fpm log --oneline                   # operation history
+abc123  install  requests==2.31.0 (+4 deps)
+def456  remove   flask
+
+$ fpm blame certifi                   # who installed this?
+  Status: transitive (dependency of requests)
+  Required by: requests, httpx
+
+$ fpm branch create experiment        # parallel environment
+$ fpm branch switch experiment
+$ fpm bisect start                    # find breaking change
+```
+
 ### Intelligent Error Messages
 
 ```bash
@@ -187,9 +215,15 @@ fpm list -a                          # see ALL packages (pip, conda, etc.)
 | `fpm snapshot create [msg]` | Capture environment state             |
 | `fpm snapshot restore <id>` | Roll back to snapshot                 |
 | `fpm snapshot diff <id>`    | Compare snapshots                     |
-| `fpm tag <name> [snap-id]`  | Name a snapshot (like git tag)        |
 | `fpm status`                | Show drift from lockfile (like git status) |
+| `fpm stash` / `pop`         | Save/restore unlocked packages (like git stash) |
+| `fpm branch create/switch`  | Environment branches (like git branch) |
+| `fpm tag <name> [snap-id]`  | Name a snapshot (like git tag)        |
 | `fpm log`                   | Show operation history (like git log) |
+| `fpm bisect`                | Binary search snapshots for breaking change |
+| `fpm blame <pkg>`           | Show why/when a package was installed |
+| `fpm revert <id>`           | Undo a past operation by journal ID   |
+| `fpm cherry-pick <snap> <pkg>` | Restore single package from snapshot |
 
 ### Tools & System
 
@@ -251,9 +285,12 @@ config > defaults
 | Immutable version pins      | No               | No                      | Yes (enforced by resolver)        |
 | Dependency graph tracking   | No               | No                      | Yes (requested vs transitive)     |
 | Autoremove orphans          | No               | No                      | Yes (like apt/pacman)             |
+| Git-like workflow           | No               | No                      | Yes (stash, branch, bisect, log)  |
+| Operation history/revert    | No               | No                      | Yes (journal + revert by ID)      |
+| Environment branching       | No               | No                      | Yes (parallel experiments)        |
 | Reflink support             | No               | No                      | Yes (CoW on APFS/btrfs)           |
 | Reference-tracked GC        | No               | No                      | Yes (only removes orphans)        |
-| Bundled CA certificates     | certifi          | webpki                  | Mozilla (built-in)                |
+| Multi-user safe (locking)   | No               | No                      | Yes (file locks, atomic ops)      |
 | Per-host TLS bypass         | `--trusted-host` | `--allow-insecure-host` | `--allow-insecure-host`           |
 | Requires venv for install   | No               | Yes (`--system`)        | Yes (`--system`)                  |
 
