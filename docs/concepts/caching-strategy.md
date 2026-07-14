@@ -99,6 +99,47 @@ fpm cache clean           # nuclear: remove everything
 `fpm cache gc` is safe — it only removes CAS entries that no environment
 references. Installed packages are never affected.
 
+### Dangling References (Deleted Projects)
+
+If you delete a project directory without running `fpm remove` first:
+
+```bash
+rm -rf ~/projects/old-project/    # deleted without fpm knowing
+```
+
+The CAS reference for that project still exists (`refs/by-env/{hash}.json`
+still lists the deleted path). This prevents GC from reclaiming the packages.
+
+**fpm handles this automatically**: `fpm cache gc` validates that each
+referenced environment path still exists on disk. If the path is gone,
+the reference is treated as dangling and the CAS entry becomes eligible
+for collection.
+
+```bash
+# This will detect deleted environments and free the space:
+fpm cache gc
+
+# To see what would be cleaned (including from deleted projects):
+fpm cache list-unused
+```
+
+You do NOT need to manually clean up references. Just run `fpm cache gc`
+periodically, or after deleting projects.
+
+### Best Practice: Unregister Before Deleting
+
+For the cleanest cleanup, unregister the environment before deleting:
+
+```bash
+cd ~/projects/old-project
+fpm cache gc              # release references for this env
+cd ..
+rm -rf old-project/       # now safe to delete
+```
+
+But this is optional — `fpm cache gc` from anywhere will find and clean
+dangling references automatically.
+
 ## Cache Clearing Safety
 
 | Action | Installed packages affected? | Need to re-download? |

@@ -107,12 +107,10 @@ func (r *RefTracker) ListUnused() ([]UnusedEntry, error) {
 			if !entry.IsDir() {
 				continue
 			}
-			key := CASKey{Algorithm: "sha256", Digest: prefix.Name() + entry.Name()[0:]}
-			// Reconstruct the full digest from prefix + rest
-			key.Digest = entry.Name()
+			key := CASKey{Algorithm: "sha256", Digest: entry.Name()}
 
 			casRef, err := r.readCASRef(key)
-			if err != nil || len(casRef.Environments) == 0 {
+			if err != nil || isUnreferenced(casRef) {
 				info, _ := entry.Info()
 				var size int64
 				if info != nil {
@@ -130,6 +128,23 @@ func (r *RefTracker) ListUnused() ([]UnusedEntry, error) {
 	}
 
 	return unused, nil
+}
+
+// isUnreferenced checks if a CAS entry has no live references.
+// It validates that referenced environment paths actually exist on disk,
+// cleaning up dangling references from deleted projects.
+func isUnreferenced(ref *CASRef) bool {
+	if len(ref.Environments) == 0 {
+		return true
+	}
+	// Check if any referenced environment actually exists
+	for _, envPath := range ref.Environments {
+		if _, err := os.Stat(envPath); err == nil {
+			return false
+		}
+	}
+	// All referenced environments are gone — this is dangling
+	return true
 }
 
 type UnusedEntry struct {
